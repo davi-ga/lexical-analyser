@@ -94,7 +94,7 @@ char** string_tokens(char *content, int *length) {
     }
     
     // Delimitadores: espaço, parênteses, barras, chaves
-    char delimiters[] = " ()\\{}";
+    char delimiters[] = " ()\\{};";
     
     // Primeiro, conta quantos tokens existem
     int count = 0;
