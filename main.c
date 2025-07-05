@@ -139,7 +139,6 @@ char** string_tokens(char *content, int *length) {
     return tokens;
 }
 
-// ...existing code...
 
 int main(){
     char *content = read_file("./codigos/Erro_exemplo_5.rtf");
