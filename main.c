@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h> 
+#include <string.h>
+#include <ctype.h>
 
 char* read_file(char *file_path){
     FILE *pont_arq;
@@ -139,9 +140,119 @@ char** string_tokens(char *content, int *length) {
     return tokens;
 }
 
+int is_keyword(char *token) {
+    if (token == NULL) {
+        return 0;
+    }
+    
+    // Array de keywords definidas
+    char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao","senao","se","para"};
+    int num_keywords = sizeof(keywords) / sizeof(keywords[0]);
+    
+    // Compara o token com cada keyword
+    for (int i = 0; i < num_keywords; i++) {
+        if (strcmp(token, keywords[i]) == 0) {
+            return 1; // É uma keyword
+        }
+    }
+    
+    return 0; // Não é uma keyword
+}
+
+// Função para calcular a distância de Levenshtein (similaridade entre strings)
+int levenshtein_distance(char *s1, char *s2) {
+    int len1 = strlen(s1);
+    int len2 = strlen(s2);
+    
+    // Matriz para programação dinâmica
+    int matrix[len1 + 1][len2 + 1];
+    
+    // Inicializa primeira linha e coluna
+    for (int i = 0; i <= len1; i++) {
+        matrix[i][0] = i;
+    }
+    for (int j = 0; j <= len2; j++) {
+        matrix[0][j] = j;
+    }
+    
+    // Preenche a matriz
+    for (int i = 1; i <= len1; i++) {
+        for (int j = 1; j <= len2; j++) {
+            int cost = (s1[i-1] == s2[j-1]) ? 0 : 1;
+            
+            int min_val = matrix[i-1][j] + 1;     // Deleção
+            int temp = matrix[i][j-1] + 1;        // Inserção
+            if (temp < min_val) min_val = temp;
+            
+            temp = matrix[i-1][j-1] + cost;       // Substituição
+            if (temp < min_val) min_val = temp;
+            
+            matrix[i][j] = min_val;
+        }
+    }
+    
+    return matrix[len1][len2];
+}
+
+int has_lexical_error(char *token) {
+    if (token == NULL) {
+        return 0;
+    }
+    
+    // Array de keywords corretas
+    char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao"};
+    int num_keywords = sizeof(keywords) / sizeof(keywords[0]);
+    
+    // Se já é uma keyword correta, não é erro
+    if (is_keyword(token)) {
+        return 0;
+    }
+    
+    // Converte o token para minúsculas para comparação
+    char *token_lower = malloc(strlen(token) + 1);
+    strcpy(token_lower, token);
+    for (int i = 0; token_lower[i]; i++) {
+        token_lower[i] = tolower(token_lower[i]);
+    }
+    
+    // Verifica similaridade com cada keyword
+    for (int i = 0; i < num_keywords; i++) {
+        int distance = levenshtein_distance(token_lower, keywords[i]);
+        int keyword_len = strlen(keywords[i]);
+        int token_len = strlen(token_lower);
+        
+        // Se a distância é pequena em relação ao tamanho da palavra
+        // ou se é um prefixo da keyword (como "escrev" para "escreva")
+        if ((distance <= 2 && keyword_len > 3) || 
+            (strncmp(token_lower, keywords[i], token_len) == 0 && token_len >= keyword_len - 2)) {
+            free(token_lower);
+            return 1; // Erro léxico detectado
+        }
+    }
+    
+    free(token_lower);
+    return 0; // Não é erro léxico
+}
+
+void classify_tokens(char **tokens, int length) {
+    if (tokens == NULL || length <= 0) {
+        return;
+    }
+    
+    printf("\nClassificação dos tokens:\n");
+    for (int i = 0; i < length; i++) {
+        if (has_lexical_error(tokens[i])) {
+            printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+        } else if (is_keyword(tokens[i])) {
+            printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+        } else {
+            printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
+        }
+    }
+}
 
 int main(){
-    char *content = read_file("./codigos/Erro_exemplo_5.rtf");
+    char *content = read_file("./data/Erro_Exemplo_9.rtf");
     if (content == NULL) {
         return 1;
     }
@@ -155,6 +266,9 @@ int main(){
             printf("tokens[%d] = \"%s\"\n", i, tokens[i]);
         }
         printf("\nTotal de tokens: %d\n", length);
+        
+        // Classifica os tokens
+        classify_tokens(tokens, length);
         
         // Libera a memória de cada token e do array
         for (int i = 0; i < length; i++) {
