@@ -172,7 +172,6 @@ int is_keyword(char *token) {
         (unsigned char)token[1] == 0xBB && 
         (unsigned char)token[2] == 0xBF) {
         clean_token = token + 3; // Pula o BOM
-    }
     
     // Array de keywords definidas
     char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao","senao","se","para"};
