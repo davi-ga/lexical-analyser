@@ -278,16 +278,9 @@ int main() {
     struct dirent *entry;
     char path[512];
 
-    FILE *saida = fopen("resultados.txt", "w, ccs=UTF-8");
-    if (saida == NULL) {
-        printf("Não foi possível criar resultados.txt\n");
-        return 1;
-    }
-
     dir = opendir("./data");
     if (dir == NULL) {
-        fprintf(saida, "Não foi possível abrir o diretório ./datartf\n");
-        fclose(saida);
+        printf("Não foi possível abrir o diretório ./data\n");
         return 1;
     }
 
@@ -297,12 +290,12 @@ int main() {
 
         snprintf(path, sizeof(path), "./data/%s", entry->d_name);
 
-        fprintf(saida, "\n==============================\n");
-        fprintf(saida, "Processando arquivo: %s\n", path);
+        printf("\n==============================\n");
+        printf("Processando arquivo: %s\n", path);
 
         char *content = read_file(path);
         if (content == NULL) {
-            fprintf(saida, "Erro ao ler o arquivo: %s\n", path);
+            printf("Erro ao ler o arquivo: %s\n", path);
             continue;
         }
 
@@ -310,24 +303,24 @@ int main() {
         char **tokens = string_tokens(content, &length);
 
         if (tokens != NULL) {
-            fprintf(saida, "Tokens como strings:\n");
+            printf("Tokens como strings:\n");
             for (int i = 0; i < length; i++) {
-                fprintf(saida, "tokens[%d] = \"%s\"\n", i, tokens[i]);
+                printf("tokens[%d] = \"%s\"\n", i, tokens[i]);
             }
-            fprintf(saida, "\nTotal de tokens: %d\n", length);
+            printf("\nTotal de tokens: %d\n", length);
 
-            fprintf(saida, "\nClassificação dos tokens:\n");
+            printf("\nClassificação dos tokens:\n");
             int i = 0;
             while (i < length) {
                 if (is_variable(tokens[i])) {
-                    fprintf(saida, "tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
+                    printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
                 } else if (has_lexical_error(tokens[i])) {
-                    fprintf(saida, "tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+                    printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
                     break;
                 } else if (is_keyword(tokens[i])) {
-                    fprintf(saida, "tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                    printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
                 } else {
-                    fprintf(saida, "tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
+                    printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
                 }
                 i++;
             }
@@ -337,11 +330,10 @@ int main() {
             }
             free(tokens);
         }
-        fprintf(saida, "\nMemória ocupada: %zu Bytes ou %.2f KB\n", memoria, memoria / 1024.0);
+        printf("\nMemória ocupada: %zu Bytes ou %.2f KB\n", memoria, memoria / 1024.0);
         free(content);
     }
 
     closedir(dir);
-    fclose(saida);
     return 0;
 }
