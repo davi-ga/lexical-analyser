@@ -358,15 +358,18 @@ int main() {
                     } else if (i + 1 < length) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
                         printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i + 1, tokens[i + 1]);
+                        printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                         break; 
                     } else {
                         printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
                         printf("tokens[%d] = <FIM> -> LEXICAL ERROR\n", i + 1);
+                        printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                         break;
                     }
                 } else if ((i + 1 < length) && strcmp(tokens[i + 1], "=") == 0) {
                     if (tokens[i][0] != '!') {
                         printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+                        printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                         break;
                     }
                 } else if (strcmp(tokens[i], ";") == 0) {
@@ -385,6 +388,7 @@ int main() {
                     printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
                 } else if (has_lexical_error(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+                    printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                     break;
                 } else if (is_keyword(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
