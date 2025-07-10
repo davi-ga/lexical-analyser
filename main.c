@@ -278,67 +278,70 @@ int main() {
     struct dirent *entry;
     char path[512];
 
+    FILE *saida = fopen("resultados.txt", "w, ccs=UTF-8");
+    if (saida == NULL) {
+        printf("Não foi possível criar resultados.txt\n");
+        return 1;
+    }
+
     dir = opendir("./data");
     if (dir == NULL) {
-        printf("Não foi possível abrir o diretório ./data\n");
+        fprintf(saida, "Não foi possível abrir o diretório ./datartf\n");
+        fclose(saida);
         return 1;
     }
 
     while ((entry = readdir(dir)) != NULL) {
-        // Ignora "." e ".."
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
 
-        // Monta o caminho completo do arquivo
         snprintf(path, sizeof(path), "./data/%s", entry->d_name);
 
-        printf("\n==============================\n");
-        printf("Processando arquivo: %s\n", path);
+        fprintf(saida, "\n==============================\n");
+        fprintf(saida, "Processando arquivo: %s\n", path);
 
         char *content = read_file(path);
         if (content == NULL) {
-            printf("Erro ao ler o arquivo: %s\n", path);
+            fprintf(saida, "Erro ao ler o arquivo: %s\n", path);
             continue;
         }
 
         int length = 0;
         char **tokens = string_tokens(content, &length);
-        int encontrou_erro = 0;
 
         if (tokens != NULL) {
-            printf("Tokens como strings:\n");
+            fprintf(saida, "Tokens como strings:\n");
             for (int i = 0; i < length; i++) {
-                printf("tokens[%d] = \"%s\"\n", i, tokens[i]);
+                fprintf(saida, "tokens[%d] = \"%s\"\n", i, tokens[i]);
             }
-            printf("\nTotal de tokens: %d\n", length);
+            fprintf(saida, "\nTotal de tokens: %d\n", length);
 
-            printf("\nClassificação dos tokens:\n");
+            fprintf(saida, "\nClassificação dos tokens:\n");
             int i = 0;
             while (i < length) {
                 if (is_variable(tokens[i])) {
-                    printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
+                    fprintf(saida, "tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
                 } else if (has_lexical_error(tokens[i])) {
-                    printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
-                    encontrou_erro = 1;
+                    fprintf(saida, "tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
                     break;
                 } else if (is_keyword(tokens[i])) {
-                    printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                    fprintf(saida, "tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
                 } else {
-                    printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
+                    fprintf(saida, "tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
                 }
                 i++;
             }
 
-            // Libera a memória de cada token e do array
             for (int j = 0; j < length; j++) {
                 free(tokens[j]);
             }
             free(tokens);
         }
-        printf("\nMemória ocupada: %zu Bytes ou %.2f KB\n", memoria, memoria / 1024.0);
+        fprintf(saida, "\nMemória ocupada: %zu Bytes ou %.2f KB\n", memoria, memoria / 1024.0);
         free(content);
     }
 
     closedir(dir);
+    fclose(saida);
     return 0;
 }
