@@ -1,3 +1,6 @@
+// Ana Carolina dos Santos
+// Davi Galdino de Oliveira
+
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
