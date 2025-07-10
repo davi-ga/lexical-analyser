@@ -1,7 +1,24 @@
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#define MAX_MEMORY (2048 * 1024) // 2048 KB em bytes
+
+size_t memoria = sizeof(memoria);
+
+void* safe_malloc(size_t size) {
+    if (memoria + size > MAX_MEMORY) {
+        printf("ERRO: Memória Insuficiente\n");
+        exit(1);
+    }
+    void *ptr = malloc(size);
+    if (ptr != NULL) {
+        memoria += size;
+        //printf("Memória ocupada: %zu bytes\n", memoria); 
+    }
+    return ptr;
+}
 
 char* read_file(char *file_path){
     FILE *pont_arq;
@@ -20,7 +37,7 @@ char* read_file(char *file_path){
     fseek(pont_arq, 0, SEEK_SET);
     
     // Aloca memória para o buffer
-    buffer = malloc(file_size + 1);
+    buffer = safe_malloc(file_size + 1);
     if (buffer == NULL) {
         printf("Erro ao alocar memória!");
         fclose(pont_arq);
@@ -46,7 +63,7 @@ int* ascii_tokens(char *content, int *length) {
     
     // Primeiro, conta quantos tokens existem
     int count = 0;
-    char *temp = malloc(strlen(content) + 1);
+    char *temp = safe_malloc(strlen(content) + 1);
     strcpy(temp, content);
     
     char *token = strtok(temp, delimiters);
@@ -62,14 +79,14 @@ int* ascii_tokens(char *content, int *length) {
     }
     
     // Aloca array para armazenar os códigos ASCII dos tokens
-    int *tokens = malloc(count * sizeof(int));
+    int *tokens = safe_malloc(count * sizeof(int));
     if (tokens == NULL) {
         *length = 0;
         return NULL;
     }
     
     // Segunda passada para extrair os tokens
-    temp = malloc(strlen(content) + 1);
+    temp = safe_malloc(strlen(content) + 1);
     strcpy(temp, content);
     
     int index = 0;
@@ -85,9 +102,12 @@ int* ascii_tokens(char *content, int *length) {
     free(temp);
     *length = count;
     return tokens;
+};
+
+int is_variable(const char *token) {
+    // Verifica se começa com '!' e tem mais de 1 caractere
+    return token && token[0] == '!' && strlen(token) > 1;
 }
-
-
 
 char** string_tokens(char *content, int *length) {
     if (content == NULL || length == NULL) {
@@ -99,7 +119,7 @@ char** string_tokens(char *content, int *length) {
     
     // Primeiro, conta quantos tokens existem
     int count = 0;
-    char *temp = malloc(strlen(content) + 1);
+    char *temp = safe_malloc(strlen(content) + 1);
     strcpy(temp, content);
     
     char *token = strtok(temp, delimiters);
@@ -115,21 +135,21 @@ char** string_tokens(char *content, int *length) {
     }
     
     // Aloca array para armazenar ponteiros para strings
-    char **tokens = malloc(count * sizeof(char*));
+    char **tokens = safe_malloc(count * sizeof(char*));
     if (tokens == NULL) {
         *length = 0;
         return NULL;
     }
     
     // Segunda passada para extrair os tokens
-    temp = malloc(strlen(content) + 1);
+    temp = safe_malloc(strlen(content) + 1);
     strcpy(temp, content);
     
     int index = 0;
     token = strtok(temp, delimiters);
     while (token != NULL && index < count) {
         // Aloca memória e copia o token
-        tokens[index] = malloc(strlen(token) + 1);
+        tokens[index] = safe_malloc(strlen(token) + 1);
         strcpy(tokens[index], token);
         index++;
         token = strtok(NULL, delimiters);
@@ -209,7 +229,7 @@ int has_lexical_error(char *token) {
     }
     
     // Converte o token para minúsculas para comparação
-    char *token_lower = malloc(strlen(token) + 1);
+    char *token_lower = safe_malloc(strlen(token) + 1);
     strcpy(token_lower, token);
     for (int i = 0; token_lower[i]; i++) {
         token_lower[i] = tolower(token_lower[i]);
@@ -238,10 +258,12 @@ void classify_tokens(char **tokens, int length) {
     if (tokens == NULL || length <= 0) {
         return;
     }
-    
+
     printf("\nClassificação dos tokens:\n");
     for (int i = 0; i < length; i++) {
-        if (has_lexical_error(tokens[i])) {
+        if (is_variable(tokens[i])) {
+            printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
+        } else if (has_lexical_error(tokens[i])) {
             printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
         } else if (is_keyword(tokens[i])) {
             printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
@@ -251,32 +273,72 @@ void classify_tokens(char **tokens, int length) {
     }
 }
 
-int main(){
-    char *content = read_file("./data/Erro_Exemplo_9.rtf");
-    if (content == NULL) {
+int main() {
+    DIR *dir;
+    struct dirent *entry;
+    char path[512];
+
+    dir = opendir("./data");
+    if (dir == NULL) {
+        printf("Não foi possível abrir o diretório ./data\n");
         return 1;
     }
-    
-    int length = 0;
-    char **tokens = string_tokens(content, &length);
-    
-    if (tokens != NULL) {
-        printf("Tokens como strings:\n");
-        for (int i = 0; i < length; i++) {
-            printf("tokens[%d] = \"%s\"\n", i, tokens[i]);
+
+    while ((entry = readdir(dir)) != NULL) {
+        // Ignora "." e ".."
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+
+        // Monta o caminho completo do arquivo
+        snprintf(path, sizeof(path), "./data/%s", entry->d_name);
+
+        printf("\n==============================\n");
+        printf("Processando arquivo: %s\n", path);
+
+        char *content = read_file(path);
+        if (content == NULL) {
+            printf("Erro ao ler o arquivo: %s\n", path);
+            continue;
         }
-        printf("\nTotal de tokens: %d\n", length);
-        
-        // Classifica os tokens
-        classify_tokens(tokens, length);
-        
-        // Libera a memória de cada token e do array
-        for (int i = 0; i < length; i++) {
-            free(tokens[i]);
+
+        int length = 0;
+        char **tokens = string_tokens(content, &length);
+        int encontrou_erro = 0;
+
+        if (tokens != NULL) {
+            printf("Tokens como strings:\n");
+            for (int i = 0; i < length; i++) {
+                printf("tokens[%d] = \"%s\"\n", i, tokens[i]);
+            }
+            printf("\nTotal de tokens: %d\n", length);
+
+            printf("\nClassificação dos tokens:\n");
+            int i = 0;
+            while (i < length) {
+                if (is_variable(tokens[i])) {
+                    printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
+                } else if (has_lexical_error(tokens[i])) {
+                    printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+                    encontrou_erro = 1;
+                    break;
+                } else if (is_keyword(tokens[i])) {
+                    printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                } else {
+                    printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
+                }
+                i++;
+            }
+
+            // Libera a memória de cada token e do array
+            for (int j = 0; j < length; j++) {
+                free(tokens[j]);
+            }
+            free(tokens);
         }
-        free(tokens);
+        printf("\nMemória ocupada: %zu Bytes ou %.2f KB\n", memoria, memoria / 1024.0);
+        free(content);
     }
-    
-    free(content);
+
+    closedir(dir);
     return 0;
 }
