@@ -20,6 +20,17 @@ void* safe_malloc(size_t size) {
     return ptr;
 }
 
+char* clear_token(char *token) {
+    if (token == NULL) return NULL;
+    if (strlen(token) >= 3 &&
+        (unsigned char)token[0] == 0xEF &&
+        (unsigned char)token[1] == 0xBB &&
+        (unsigned char)token[2] == 0xBF) {
+        return token + 3; // Pula o BOM
+    }
+    return token;
+}
+
 char* read_file(char *file_path){
     FILE *pont_arq;
     char *buffer = NULL;
@@ -166,13 +177,7 @@ int is_keyword(char *token) {
     }
     
     // Remove BOM UTF-8 se presente no início do token
-    char *clean_token = token;
-    if (strlen(token) >= 3 && 
-        (unsigned char)token[0] == 0xEF && 
-        (unsigned char)token[1] == 0xBB && 
-        (unsigned char)token[2] == 0xBF) {
-        clean_token = token + 3; // Pula o BOM
-    }
+    char *cleaned = clear_token(token);
     
     // Array de keywords definidas
     char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao","senao","se","para"};
@@ -180,7 +185,7 @@ int is_keyword(char *token) {
     
     // Compara o token com cada keyword
     for (int i = 0; i < num_keywords; i++) {
-        if (strcmp(clean_token, keywords[i]) == 0) {
+        if (strcmp(cleaned, keywords[i]) == 0) {
             return 1; // É uma keyword
         }
     }
@@ -238,22 +243,16 @@ int has_lexical_error(char *token) {
     }
     
     // Remove BOM UTF-8 se presente no início do token
-    char *clean_token = token;
-    if (strlen(token) >= 3 && 
-        (unsigned char)token[0] == 0xEF && 
-        (unsigned char)token[1] == 0xBB && 
-        (unsigned char)token[2] == 0xBF) {
-        clean_token = token + 3; // Pula o BOM
-    }
+    char *cleaned = clear_token(token);
     
     // Se o token limpo está vazio, não é erro léxico
-    if (strlen(clean_token) == 0) {
+    if (strlen(cleaned) == 0) {
         return 0;
     }
     
     // Converte o token para minúsculas para comparação
-    char *token_lower = safe_malloc(strlen(clean_token) + 1);
-    strcpy(token_lower, clean_token);
+    char *token_lower = safe_malloc(strlen(cleaned) + 1);
+    strcpy(token_lower, cleaned);
     for (int i = 0; token_lower[i]; i++) {
         token_lower[i] = tolower(token_lower[i]);
     }
@@ -330,20 +329,36 @@ int main() {
         int length = 0;
         char **tokens = string_tokens(content, &length);
 
-        if (tokens != NULL) {
+        if (tokens != NULL) {    
             printf("\nTotal de tokens: %d\n", length);
-
+            
             printf("\nClassificação dos tokens:\n");
             int i = 0;
             while (i < length) {
-                if (is_variable(tokens[i])) {
+                char *cleaned = clear_token(tokens[i]);
+                if (strcmp(cleaned, "funcao") == 0) {
+                    if (i + 1 < length && strncmp(tokens[i + 1], "__", 2) == 0) {
+                        printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                        printf("tokens[%d] = \"%s\" -> FUNC_NAME\n", i + 1, tokens[i + 1]);
+                        i += 2; 
+                        continue;
+                    } else if (i + 1 < length) {
+                        printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i + 1, tokens[i + 1]);
+                        break; 
+                    } else {
+                        printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                        printf("tokens[%d] = <FIM> -> LEXICAL ERROR\n", i + 1);
+                        break;
+                    }
+                } else if (is_variable(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
                 } else if (has_lexical_error(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
                     break;
                 } else if (is_keyword(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
-                } else {
+                }else {
                     printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
                 }
                 i++;
