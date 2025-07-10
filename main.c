@@ -165,13 +165,22 @@ int is_keyword(char *token) {
         return 0;
     }
     
+    // Remove BOM UTF-8 se presente no início do token
+    char *clean_token = token;
+    if (strlen(token) >= 3 && 
+        (unsigned char)token[0] == 0xEF && 
+        (unsigned char)token[1] == 0xBB && 
+        (unsigned char)token[2] == 0xBF) {
+        clean_token = token + 3; // Pula o BOM
+    }
+    
     // Array de keywords definidas
     char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao","senao","se","para"};
     int num_keywords = sizeof(keywords) / sizeof(keywords[0]);
     
     // Compara o token com cada keyword
     for (int i = 0; i < num_keywords; i++) {
-        if (strcmp(token, keywords[i]) == 0) {
+        if (strcmp(clean_token, keywords[i]) == 0) {
             return 1; // É uma keyword
         }
     }
@@ -273,24 +282,24 @@ int has_lexical_error(char *token) {
     return 0; // Não é erro léxico
 }
 
-void classify_tokens(char **tokens, int length) {
-    if (tokens == NULL || length <= 0) {
-        return;
-    }
+// void classify_tokens(char **tokens, int length) {
+//     if (tokens == NULL || length <= 0) {
+//         return;
+//     }
 
-    printf("\nClassificação dos tokens:\n");
-    for (int i = 0; i < length; i++) {
-        if (is_variable(tokens[i])) {
-            printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
-        } else if (has_lexical_error(tokens[i])) {
-            printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
-        } else if (is_keyword(tokens[i])) {
-            printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
-        } else {
-            printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
-        }
-    }
-}
+//     printf("\nClassificação dos tokens:\n");
+//     for (int i = 0; i < length; i++) {
+//         if (is_variable(tokens[i])) {
+//             printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
+//         } else if (has_lexical_error(tokens[i])) {
+//             printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+//         } else if (is_keyword(tokens[i])) {
+//             printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+//         } else {
+//             printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
+//         }
+//     }
+// }
 
 int main() {
     DIR *dir;
