@@ -351,6 +351,23 @@ int main() {
                         printf("tokens[%d] = <FIM> -> LEXICAL ERROR\n", i + 1);
                         break;
                     }
+                } else if ((i + 1 < length) && strcmp(tokens[i + 1], "=") == 0) {
+                    if (tokens[i][0] != '!') {
+                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+                        break;
+                    }
+                } else if (strcmp(tokens[i], ";") == 0) {
+                    printf("tokens[%d] = \"%s\" -> SEMICOLON\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "(") == 0) {
+                    printf("tokens[%d] = \"%s\" -> LEFT_PAREN\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], ")") == 0) {
+                    printf("tokens[%d] = \"%s\" -> RIGHT_PAREN\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "{") == 0) {
+                    printf("tokens[%d] = \"%s\" -> LEFT_BRACE\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "}") == 0) {
+                    printf("tokens[%d] = \"%s\" -> RIGHT_BRACE\n", i, tokens[i]);
+                } else if (isdigit(tokens[i][0])) {
+                    printf("tokens[%d] = \"%s\" -> INTEGER\n", i, tokens[i]);
                 } else if (is_variable(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
                 } else if (has_lexical_error(tokens[i])) {
