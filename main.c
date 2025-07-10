@@ -219,8 +219,8 @@ int has_lexical_error(char *token) {
         return 0;
     }
     
-    // Array de keywords corretas
-    char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao"};
+    // Array de keywords corretas (mesmo array usado em is_keyword)
+    char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao", "senao", "se", "para"};
     int num_keywords = sizeof(keywords) / sizeof(keywords[0]);
     
     // Se já é uma keyword correta, não é erro
@@ -228,9 +228,23 @@ int has_lexical_error(char *token) {
         return 0;
     }
     
+    // Remove BOM UTF-8 se presente no início do token
+    char *clean_token = token;
+    if (strlen(token) >= 3 && 
+        (unsigned char)token[0] == 0xEF && 
+        (unsigned char)token[1] == 0xBB && 
+        (unsigned char)token[2] == 0xBF) {
+        clean_token = token + 3; // Pula o BOM
+    }
+    
+    // Se o token limpo está vazio, não é erro léxico
+    if (strlen(clean_token) == 0) {
+        return 0;
+    }
+    
     // Converte o token para minúsculas para comparação
-    char *token_lower = safe_malloc(strlen(token) + 1);
-    strcpy(token_lower, token);
+    char *token_lower = safe_malloc(strlen(clean_token) + 1);
+    strcpy(token_lower, clean_token);
     for (int i = 0; token_lower[i]; i++) {
         token_lower[i] = tolower(token_lower[i]);
     }
@@ -241,10 +255,15 @@ int has_lexical_error(char *token) {
         int keyword_len = strlen(keywords[i]);
         int token_len = strlen(token_lower);
         
-        // Se a distância é pequena em relação ao tamanho da palavra
-        // ou se é um prefixo da keyword (como "escrev" para "escreva")
-        if ((distance <= 2 && keyword_len > 3) || 
-            (strncmp(token_lower, keywords[i], token_len) == 0 && token_len >= keyword_len - 2)) {
+        // Se a distância é pequena em relação ao tamanho da palavra (erro léxico)
+        if (distance > 0 && distance <= 2 && keyword_len > 3) {
+            free(token_lower);
+            return 1; // Erro léxico detectado
+        }
+        
+        // Se é um prefixo muito próximo da keyword (como "escrev" para "escreva")
+        if (strncmp(token_lower, keywords[i], token_len) == 0 && 
+            token_len >= keyword_len - 2 && token_len < keyword_len) {
             free(token_lower);
             return 1; // Erro léxico detectado
         }
@@ -303,10 +322,6 @@ int main() {
         char **tokens = string_tokens(content, &length);
 
         if (tokens != NULL) {
-            printf("Tokens como strings:\n");
-            for (int i = 0; i < length; i++) {
-                printf("tokens[%d] = \"%s\"\n", i, tokens[i]);
-            }
             printf("\nTotal de tokens: %d\n", length);
 
             printf("\nClassificação dos tokens:\n");
