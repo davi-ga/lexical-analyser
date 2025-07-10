@@ -1,0 +1,7 @@
+﻿
+pincipal(){ 
+inteiro !d;
+ escreva(“Escreva um número ”); 
+leia (!d); 
+    escreva(“O número informado é    ”, !d); 
+}
