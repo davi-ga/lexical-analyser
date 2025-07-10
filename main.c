@@ -336,7 +336,20 @@ int main() {
             int i = 0;
             while (i < length) {
                 char *cleaned = clear_token(tokens[i]);
-                if (strcmp(cleaned, "funcao") == 0) {
+                if (strncmp(tokens[i], "“", strlen("“")) == 0) {
+                    printf("tokens[%d] = \"%s\" -> STRING\n", i, tokens[i]);
+                    i++;
+                    while (i < length) {
+                        size_t len = strlen(tokens[i]);
+                        if (len >= strlen("”") && strcmp(&tokens[i][len - strlen("”")], "”") == 0) {
+                            printf("tokens[%d] = \"%s\" -> STRING\n", i, tokens[i]);
+                            break;
+                        } else {
+                            printf("tokens[%d] = \"%s\" -> STRING\n", i, tokens[i]);
+                            i++;
+                        }
+                    }
+                } else if (strcmp(cleaned, "funcao") == 0) {
                     if (i + 1 < length && strncmp(tokens[i + 1], "__", 2) == 0) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
                         printf("tokens[%d] = \"%s\" -> FUNC_NAME\n", i + 1, tokens[i + 1]);
