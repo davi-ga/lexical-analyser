@@ -141,7 +141,7 @@ Memória ocupada: 2048 Bytes ou 2.00 KB
 
 **Desenvolvido por:**
 - [Davi Galdino](https://github.com/davi-ga)
-- [Ana Misque](https://github.com/mxtqnt)
+- [Ana Misque](https://github.com/mxtqnt) Te amo <3
 
 ## 📄 Licença
 
