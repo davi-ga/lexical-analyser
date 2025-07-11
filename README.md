@@ -1,6 +1,6 @@
-# Analisador Léxico - Compiladores
+# Analisador Léxico - Gramática e Compiladores
 
-Primeira parte do trabalho de Compiladores do curso de Ciência da Computação do IFG-Anápolis.
+Primeira parte do trabalho de Gramática e Compiladores do curso de Ciência da Computação do IFG-Anápolis.
 
 ## 📝 Descrição
 
