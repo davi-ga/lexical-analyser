@@ -8,17 +8,17 @@
 #include <ctype.h>
 #define MAX_MEMORY (2048 * 1024) // 2048 KB em bytes
 
-size_t memoria = sizeof(memoria);
+size_t memory = sizeof(memory);
 
 void* safe_malloc(size_t size) {
-    if (memoria + size > MAX_MEMORY) {
+    if (memory + size > MAX_MEMORY) {
         printf("ERRO: Memória Insuficiente\n");
         exit(1);
     }
     void *ptr = malloc(size);
     if (ptr != NULL) {
-        memoria += size;
-        //printf("Memória ocupada: %zu bytes\n", memoria); 
+        memory += size;
+        //printf("Memória ocupada: %zu bytes\n", memory); 
     }
     return ptr;
 }
@@ -35,34 +35,34 @@ char* clear_token(char *token) {
 }
 
 char* read_file(char *file_path){
-    FILE *pont_arq;
+    FILE *file_ptr;
     char *buffer = NULL;
     long file_size;
 
-    pont_arq = fopen(file_path,"r");
-    if (pont_arq == NULL){
+    file_ptr = fopen(file_path,"r");
+    if (file_ptr == NULL){
         printf("Erro ao tentar abrir o arquivo!");
         return NULL;
     }
     
     // Descobre o tamanho do arquivo
-    fseek(pont_arq, 0, SEEK_END);
-    file_size = ftell(pont_arq);
-    fseek(pont_arq, 0, SEEK_SET);
+    fseek(file_ptr, 0, SEEK_END);
+    file_size = ftell(file_ptr);
+    fseek(file_ptr, 0, SEEK_SET);
     
     // Aloca memória para o buffer
     buffer = safe_malloc(file_size + 1);
     if (buffer == NULL) {
         printf("Erro ao alocar memória!");
-        fclose(pont_arq);
+        fclose(file_ptr);
         return NULL;
     }
     
     // Lê o arquivo inteiro
-    fread(buffer, 1, file_size, pont_arq);
+    fread(buffer, 1, file_size, file_ptr);
     buffer[file_size] = '\0'; // Adiciona terminador de string
     
-    fclose(pont_arq);
+    fclose(file_ptr);
     return buffer;
 }
 
@@ -406,7 +406,7 @@ int main() {
             }
             free(tokens);
         }
-        printf("\nMemória ocupada: %zu Bytes ou %.2f KB\n", memoria, memoria / 1024.0);
+        printf("\nMemória ocupada: %zu Bytes ou %.2f KB\n", memory, memory / 1024.0);
         free(content);
     }
 
