@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdbool.h>
 #define MAX_MEMORY (2048 * 1024) // 2048 KB em bytes
 
 size_t memory = sizeof(memory);
@@ -16,6 +17,7 @@ const int NUM_KEYWORDS = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
 // const char DELIMITERS[] = " ()\\{};\n\r";
 const char DELIMITERS[] = " ";
 const char SPECIAL_TOKENS[] = "()\\{};\n\r\"";
+bool PRINCIPAL_FUNC = false;
 
 void* safe_malloc(size_t size) {
     if (memory + size > MAX_MEMORY) {
@@ -411,6 +413,9 @@ int main() {
             int i = 0;
             while (i < length) {
                 char *cleaned = clear_token(tokens[i]);
+                if (strcmp(tokens[i], "principal") == 0) {
+                    PRINCIPAL_FUNC = true;
+                }
                 if (strcmp(tokens[i], "\\n") == 0) {
                     if (i == 0) {
                         // Permitir quebra de linha no início
@@ -502,6 +507,10 @@ int main() {
                     printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
                 }
                 i++;
+            }
+            
+            if (!PRINCIPAL_FUNC){
+                printf("O programa não possui uma função principal definida.\n");
             }
 
             check_brackets_and_quotes(tokens, length);
