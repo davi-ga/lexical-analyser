@@ -17,6 +17,8 @@ const int NUM_KEYWORDS = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
 // const char DELIMITERS[] = " ()\\{};\n\r";
 const char DELIMITERS[] = " ";
 const char SPECIAL_TOKENS[] = "()\\{};\n\r\"";
+const char* MULTI_TOKENS[] = {"==", "<=", ">=", "&&", "||", "<>"};
+#define NUM_MULTI_TOKENS (sizeof(MULTI_TOKENS) / sizeof(MULTI_TOKENS[0]))
 bool PRINCIPAL_FUNC = false;
 
 void* safe_malloc(size_t size) {
@@ -87,6 +89,18 @@ char** string_tokens(char *content, int *length) {
 
     // contar tokens
     while (content[i] != '\0') {
+        int matched = 0;
+        for (int k = 0; k < NUM_MULTI_TOKENS; k++) {
+            int len = strlen(MULTI_TOKENS[k]);
+            if (strncmp(&content[i], MULTI_TOKENS[k], len) == 0) {
+                count++;
+                i += len;
+                matched = 1;
+                break;
+            }
+        }
+        if (matched) continue;
+
         // Pula espaços que não sejam \n
         if (content[i] == ' ' || content[i] == '\t') {
             i++;
@@ -320,25 +334,19 @@ char* suggest_keyword(char *token) {
 int check_brackets_and_quotes(char **tokens, int length) {
     char stack[length]; 
     int top = -1;
-    int inside_quote = 0; // flag para saber se estamos dentro de uma string
+    int inside_quote = 0;
 
     for (int i = 0; i < length; i++) {
         char *tok = tokens[i];
-
-        // Verifica aspas
         if (strcmp(tok, "\"") == 0) {
             if (!inside_quote) {
-                inside_quote = 1; // abre string
+                inside_quote = 1; 
             } else {
-                inside_quote = 0; // fecha string
+                inside_quote = 0;
             }
             continue;
         }
-
-        // Se estamos dentro de string, ignoramos os tokens de bracket
         if (inside_quote) continue;
-
-        // Verifica parênteses e chaves
         if (strcmp(tok, "(") == 0 || strcmp(tok, "[") == 0 || strcmp(tok, "{") == 0) {
             stack[++top] = tok[0];
         }
@@ -385,35 +393,26 @@ int check_return_statement(char **tokens, int length) {
 
     for (int i = 0; i < length; i++) {
         char *token = tokens[i];
-
-        // Handles the start of a function
         if (strcmp(token, "funcao") == 0) {
             inside_function = true;
             has_return = false;
-            // Verifica se o próximo token é um nome de função
             if (i + 1 < length && strncmp(tokens[i + 1], "__", 2) == 0) {
                 current_function_name = tokens[i + 1];
             } else {
-                current_function_name = "funcao sem nome"; // Trata o caso de erro
+                current_function_name = "funcao sem nome"; 
             }
         }
-        
-        // Handles the 'retorno' keyword
         if (inside_function && strcmp(token, "retorno") == 0) {
             has_return = true;
         }
-
-        // Handles the end of a function
         if (strcmp(token, "}") == 0) {
             if (inside_function) {
-                // A 'principal' function is not required to have a return statement.
                 if (current_function_name != NULL && strcmp(current_function_name, "__principal") != 0) {
                     if (!has_return) {
                         printf("SEMANTIC ERROR: Funcao '%s' sem 'retorno'.\n", current_function_name);
                         error_count++;
                     }
                 }
-                // Reset the state for the next function
                 inside_function = false;
                 has_return = false;
                 current_function_name = NULL;
@@ -422,11 +421,35 @@ int check_return_statement(char **tokens, int length) {
     }
 
     if (error_count > 0) {
-        return 0; // Return 0 to indicate an error
+        return 0; 
     }
-    return 1; // Return 1 to indicate success
+    return 1; 
 }
 
+int is_invalid_operator(const char *token) {
+    // Lista de caracteres válidos de operadores
+    const char valid_chars[] = "<>!=&|+-*/^";
+    int len = strlen(token);
+
+    // Tokens válidos de múltiplos caracteres (válidos na gramática)
+    const char* valid_multi_tokens[] = {
+        "==", "<>", "<=", ">=", "&&", "||", "+", "-", "*", "/", "^", "<", ">", "="
+    };
+    int num_valid_multi = sizeof(valid_multi_tokens)/sizeof(valid_multi_tokens[0]);
+
+    for (int i = 0; i < num_valid_multi; i++) {
+        if (strcmp(token, valid_multi_tokens[i]) == 0) {
+            return 0; 
+        }
+    }
+
+    for (int i = 0; i < len; i++) {
+        if (strchr(valid_chars, token[i]) == NULL) {
+            return 0; 
+        }
+    }
+    return 1;
+}
 
 int main() {
     DIR *dir;
@@ -469,10 +492,8 @@ int main() {
                 }
                 if (strcmp(tokens[i], "\\n") == 0) {
                     if (i == 0) {
-                        // Permitir quebra de linha no início
                         printf("tokens[%d] = \"%s\" -> NEWLINE\n", i, tokens[i]);
                     } else {
-                        // Pega o token anterior
                         char *prev = tokens[i - 1];
                         if (strcmp(prev, ";") != 0 && strcmp(prev, "{") != 0 && strcmp(prev, "}") != 0 && strcmp(prev, "\\n") != 0) {
                             printf("tokens[%d] = \"%s\" -> SYNTAX ERROR (ausência de ; após '%s')\n", i, tokens[i], prev);
@@ -529,6 +550,38 @@ int main() {
                         printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                         break;
                     }
+                } else if (strcmp(tokens[i], ";") == 0) {
+                    printf("tokens[%d] = \"%s\" -> SEMICOLON\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "+") == 0) {
+                    printf("tokens[%d] = \"%s\" -> PLUS\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "-") == 0) {
+                    printf("tokens[%d] = \"%s\" -> MINUS\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "*") == 0) {
+                    printf("tokens[%d] = \"%s\" -> MULTIPLY\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "/") == 0) {
+                    printf("tokens[%d] = \"%s\" -> DIVIDE\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "^") == 0) {
+                    printf("tokens[%d] = \"%s\" -> POWER\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "==") == 0) {
+                    printf("tokens[%d] = \"%s\" -> EQUALS\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "<>") == 0) {
+                    printf("tokens[%d] = \"%s\" -> NOT_EQUALS\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "<") == 0) {
+                    printf("tokens[%d] = \"%s\" -> LESS\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "<=") == 0) {
+                    printf("tokens[%d] = \"%s\" -> LESS_EQUAL\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], ">") == 0) {
+                    printf("tokens[%d] = \"%s\" -> GREATER\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], ">=") == 0) {
+                    printf("tokens[%d] = \"%s\" -> GREATER_EQUAL\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "&&") == 0) {
+                    printf("tokens[%d] = \"%s\" -> AND\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "||") == 0) {
+                    printf("tokens[%d] = \"%s\" -> OR\n", i, tokens[i]);
+                } else if (is_invalid_operator(tokens[i])) {
+                    printf("tokens[%d] = \"%s\" -> LEXICAL ERROR (Operador inválido)\n", i, tokens[i]);
+                    printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                    break;
                 } else if (strcmp(tokens[i], ";") == 0) {
                     printf("tokens[%d] = \"%s\" -> SEMICOLON\n", i, tokens[i]);
                 } else if (strcmp(tokens[i], "(") == 0) {
