@@ -377,6 +377,57 @@ int check_brackets_and_quotes(char **tokens, int length) {
     return 1; 
 }
 
+int check_return_statement(char **tokens, int length) {
+    bool inside_function = false;
+    bool has_return = false;
+    int error_count = 0;
+    char *current_function_name = NULL; 
+
+    for (int i = 0; i < length; i++) {
+        char *token = tokens[i];
+
+        // Handles the start of a function
+        if (strcmp(token, "funcao") == 0) {
+            inside_function = true;
+            has_return = false;
+            // Verifica se o próximo token é um nome de função
+            if (i + 1 < length && strncmp(tokens[i + 1], "__", 2) == 0) {
+                current_function_name = tokens[i + 1];
+            } else {
+                current_function_name = "funcao sem nome"; // Trata o caso de erro
+            }
+        }
+        
+        // Handles the 'retorno' keyword
+        if (inside_function && strcmp(token, "retorno") == 0) {
+            has_return = true;
+        }
+
+        // Handles the end of a function
+        if (strcmp(token, "}") == 0) {
+            if (inside_function) {
+                // A 'principal' function is not required to have a return statement.
+                if (current_function_name != NULL && strcmp(current_function_name, "__principal") != 0) {
+                    if (!has_return) {
+                        printf("SEMANTIC ERROR: Funcao '%s' sem 'retorno'.\n", current_function_name);
+                        error_count++;
+                    }
+                }
+                // Reset the state for the next function
+                inside_function = false;
+                has_return = false;
+                current_function_name = NULL;
+            }
+        }
+    }
+
+    if (error_count > 0) {
+        return 0; // Return 0 to indicate an error
+    }
+    return 1; // Return 1 to indicate success
+}
+
+
 int main() {
     DIR *dir;
     struct dirent *entry;
@@ -508,12 +559,14 @@ int main() {
                 }
                 i++;
             }
-            
-            if (!PRINCIPAL_FUNC){
-                printf("O programa não possui uma função principal definida.\n");
-            }
 
             check_brackets_and_quotes(tokens, length);
+
+            if (!check_return_statement(tokens, length)) {
+                printf("Verificação de 'retorno' falhou. Erro encontrado.\n");
+            } else {
+                printf("Verificação de 'retorno' concluída com sucesso.\n");
+            }
 
             for (int j = 0; j < length; j++) {
                 free(tokens[j]);
