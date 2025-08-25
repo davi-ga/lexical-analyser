@@ -614,6 +614,33 @@ int main() {
                     printf("tokens[%d] = \"%s\" -> RIGHT_BRACE\n", i, tokens[i]);
                 } else if (isdigit(tokens[i][0])) {
                     printf("tokens[%d] = \"%s\" -> INTEGER\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "inteiro") == 0) {
+                    // Verifica se a próxima string começa com '!'
+                    if (tokens[i+1] != NULL && strncmp(tokens[i+1], "!", 1) == 0) {
+                        printf("tokens[%d] = \"%s\" -> INTEGER_TYPE\n", i, tokens[i]);
+                    } else {
+                        printf("tokens[%d] = \"%s\" -> INTEGER_TYPE\n", i, tokens[i]);
+                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperada uma variável após o tipo\n", i + 1, tokens[i+1]);
+                        break;
+                    }
+                } else if (strcmp(tokens[i], "texto") == 0) {
+                    // Verifica se a próxima string começa com '!'
+                    if (tokens[i+1] != NULL && strncmp(tokens[i+1], "!", 1) == 0) {
+                        printf("tokens[%d] = \"%s\" -> STRING_TYPE\n", i, tokens[i]);
+                    } else {
+                        printf("tokens[%d] = \"%s\" -> STRING_TYPE\n", i, tokens[i]);
+                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperada uma variável após o tipo\n", i + 1, tokens[i+1]);
+                        break;
+                    }
+                } else if (strcmp(tokens[i], "decimal") == 0) {
+                    // Verifica se a próxima string começa com '!'
+                    if (tokens[i+1] != NULL && strncmp(tokens[i+1], "!", 1) == 0) {
+                        printf("tokens[%d] = \"%s\" -> FLOAT_TYPE\n", i, tokens[i]);
+                    } else {
+                        printf("tokens[%d] = \"%s\" -> FLOAT_TYPE\n", i, tokens[i]);
+                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperada uma variável após o tipo\n", i + 1, tokens[i+1]);
+                        break;
+                    }
                 } else if (is_variable(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
                 } else if (has_lexical_error(tokens[i])) {
