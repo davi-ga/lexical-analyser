@@ -71,54 +71,6 @@ char* read_file(char *file_path){
     return buffer;
 }
 
-
-int* ascii_tokens(char *content, int *length) {
-    if (content == NULL || length == NULL) {
-        return NULL;
-    }
-    
-    // Primeiro, conta quantos tokens existem
-    int count = 0;
-    char *temp = safe_malloc(strlen(content) + 1);
-    strcpy(temp, content);
-    
-    char *token = strtok(temp, DELIMITERS);
-    while (token != NULL) {
-        count++;
-        token = strtok(NULL, DELIMITERS);
-    }
-    free(temp);
-    
-    if (count == 0) {
-        *length = 0;
-        return NULL;
-    }
-    
-    // Aloca array para armazenar os códigos ASCII dos tokens
-    int *tokens = safe_malloc(count * sizeof(int));
-    if (tokens == NULL) {
-        *length = 0;
-        return NULL;
-    }
-    
-    // Segunda passada para extrair os tokens
-    temp = safe_malloc(strlen(content) + 1);
-    strcpy(temp, content);
-    
-    int index = 0;
-    token = strtok(temp, DELIMITERS);
-    while (token != NULL && index < count) {
-        // Para cada token, vamos usar o primeiro caractere como representação
-        tokens[index] = (int)token[0]; 
-        index++;
-        token = strtok(NULL, DELIMITERS);
-    }
-    
-    free(temp);
-    *length = count;
-    return tokens;
-};
-
 int is_variable(const char *token) {
     // Verifica se começa com '!' e tem mais de 1 caractere
     return token && token[0] == '!' && strlen(token) > 1;
