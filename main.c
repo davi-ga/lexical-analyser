@@ -10,6 +10,11 @@
 
 size_t memory = sizeof(memory);
 
+// Arrays globais para evitar repetição
+const char* const KEYWORDS[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao", "senao", "se", "para"};
+const int NUM_KEYWORDS = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
+const char DELIMITERS[] = " ()\\{};\n\r";
+
 void* safe_malloc(size_t size) {
     if (memory + size > MAX_MEMORY) {
         printf("ERRO: Memória Insuficiente\n");
@@ -18,7 +23,7 @@ void* safe_malloc(size_t size) {
     void *ptr = malloc(size);
     if (ptr != NULL) {
         memory += size;
-        //printf("Memória ocupada: %zu bytes\n", memory); 
+        // printf("Memória ocupada: %zu bytes\n", memory); 
     }
     return ptr;
 }
@@ -72,18 +77,15 @@ int* ascii_tokens(char *content, int *length) {
         return NULL;
     }
     
-    // Delimitadores: espaço, parênteses, barras, chaves
-    char delimiters[] = " ()\\{}";
-    
     // Primeiro, conta quantos tokens existem
     int count = 0;
     char *temp = safe_malloc(strlen(content) + 1);
     strcpy(temp, content);
     
-    char *token = strtok(temp, delimiters);
+    char *token = strtok(temp, DELIMITERS);
     while (token != NULL) {
         count++;
-        token = strtok(NULL, delimiters);
+        token = strtok(NULL, DELIMITERS);
     }
     free(temp);
     
@@ -104,13 +106,12 @@ int* ascii_tokens(char *content, int *length) {
     strcpy(temp, content);
     
     int index = 0;
-    token = strtok(temp, delimiters);
+    token = strtok(temp, DELIMITERS);
     while (token != NULL && index < count) {
         // Para cada token, vamos usar o primeiro caractere como representação
-        // ou você pode modificar para calcular um hash ou outro valor
-        tokens[index] = (int)token[0]; // ASCII do primeiro caractere
+        tokens[index] = (int)token[0]; 
         index++;
-        token = strtok(NULL, delimiters);
+        token = strtok(NULL, DELIMITERS);
     }
     
     free(temp);
@@ -128,18 +129,15 @@ char** string_tokens(char *content, int *length) {
         return NULL;
     }
     
-    // Delimitadores: espaço, parênteses, barras, chaves
-    char delimiters[] = " ()\\{};\n\r";
-    
     // Primeiro, conta quantos tokens existem
     int count = 0;
     char *temp = safe_malloc(strlen(content) + 1);
     strcpy(temp, content);
     
-    char *token = strtok(temp, delimiters);
+    char *token = strtok(temp, DELIMITERS);
     while (token != NULL) {
         count++;
-        token = strtok(NULL, delimiters);
+        token = strtok(NULL, DELIMITERS);
     }
     free(temp);
     
@@ -160,13 +158,13 @@ char** string_tokens(char *content, int *length) {
     strcpy(temp, content);
     
     int index = 0;
-    token = strtok(temp, delimiters);
+    token = strtok(temp, DELIMITERS);
     while (token != NULL && index < count) {
         // Aloca memória e copia o token
         tokens[index] = safe_malloc(strlen(token) + 1);
         strcpy(tokens[index], token);
         index++;
-        token = strtok(NULL, delimiters);
+        token = strtok(NULL, DELIMITERS);
     }
     
     free(temp);
@@ -182,13 +180,9 @@ int is_keyword(char *token) {
     // Remove BOM UTF-8 se presente no início do token
     char *cleaned = clear_token(token);
     
-    // Array de keywords definidas
-    char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao","senao","se","para"};
-    int num_keywords = sizeof(keywords) / sizeof(keywords[0]);
-    
     // Compara o token com cada keyword
-    for (int i = 0; i < num_keywords; i++) {
-        if (strcmp(cleaned, keywords[i]) == 0) {
+    for (int i = 0; i < NUM_KEYWORDS; i++) {
+        if (strcmp(cleaned, KEYWORDS[i]) == 0) {
             return 1; // É uma keyword
         }
     }
@@ -236,10 +230,6 @@ int has_lexical_error(char *token) {
         return 0;
     }
     
-    // Array de keywords corretas (mesmo array usado em is_keyword)
-    char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao", "senao", "se", "para"};
-    int num_keywords = sizeof(keywords) / sizeof(keywords[0]);
-    
     // Se já é uma keyword correta, não é erro
     if (is_keyword(token)) {
         return 0;
@@ -261,9 +251,9 @@ int has_lexical_error(char *token) {
     }
     
     // Verifica similaridade com cada keyword
-    for (int i = 0; i < num_keywords; i++) {
-        int distance = levenshtein_distance(token_lower, keywords[i]);
-        int keyword_len = strlen(keywords[i]);
+    for (int i = 0; i < NUM_KEYWORDS; i++) {
+        int distance = levenshtein_distance(token_lower, (char*)KEYWORDS[i]);
+        int keyword_len = strlen(KEYWORDS[i]);
         int token_len = strlen(token_lower);
         
         // Se a distância é pequena em relação ao tamanho da palavra (erro léxico)
@@ -273,7 +263,7 @@ int has_lexical_error(char *token) {
         }
         
         // Se é um prefixo muito próximo da keyword (como "escrev" para "escreva")
-        if (strncmp(token_lower, keywords[i], token_len) == 0 && 
+        if (strncmp(token_lower, KEYWORDS[i], token_len) == 0 && 
             token_len >= keyword_len - 2 && token_len < keyword_len) {
             free(token_lower);
             return 1; // Erro léxico detectado
@@ -289,10 +279,6 @@ char* suggest_keyword(char *token) {
     if (token == NULL) {
         return NULL;
     }
-    
-    // Array de keywords corretas
-    char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao", "senao", "se", "para"};
-    int num_keywords = sizeof(keywords) / sizeof(keywords[0]);
     
     // Remove BOM UTF-8 se presente no início do token
     char *cleaned = clear_token(token);
@@ -313,21 +299,21 @@ char* suggest_keyword(char *token) {
     char *best_match = NULL;
     
     // Encontra a keyword com menor distância
-    for (int i = 0; i < num_keywords; i++) {
-        int distance = levenshtein_distance(token_lower, keywords[i]);
-        int keyword_len = strlen(keywords[i]);
+    for (int i = 0; i < NUM_KEYWORDS; i++) {
+        int distance = levenshtein_distance(token_lower, (char*)KEYWORDS[i]);
+        int keyword_len = strlen(KEYWORDS[i]);
         int token_len = strlen(token_lower);
         
         // Considera como candidato se:
         // 1. A distância é pequena (1-2 caracteres de diferença)
         // 2. É um prefixo próximo da keyword
         if ((distance > 0 && distance <= 2 && keyword_len > 3) ||
-            (strncmp(token_lower, keywords[i], token_len) == 0 && 
+            (strncmp(token_lower, KEYWORDS[i], token_len) == 0 && 
              token_len >= keyword_len - 2 && token_len < keyword_len)) {
             
             if (distance < min_distance) {
                 min_distance = distance;
-                best_match = keywords[i];
+                best_match = (char*)KEYWORDS[i];
             }
         }
     }
