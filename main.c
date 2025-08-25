@@ -77,22 +77,28 @@ int is_variable(const char *token) {
     // Verifica se começa com '!' e tem mais de 1 caractere
     return token && token[0] == '!' && strlen(token) > 1;
 }
-
 char** string_tokens(char *content, int *length) {
     if (content == NULL || length == NULL) return NULL;
 
     int count = 0;
+    int i = 0;
 
     // contar tokens
-    int i = 0;
     while (content[i] != '\0') {
-        // Pula espaços
-        if (isspace(content[i])) {
+        // Pula espaços que não sejam \n
+        if (content[i] == ' ' || content[i] == '\t') {
             i++;
             continue;
         }
 
-        // Se for caractere especial, já é um token
+        // Se for quebra de linha, conta como token
+        if (content[i] == '\n') {
+            count++;
+            i++;
+            continue;
+        }
+
+        // Se for outro caractere especial, já é um token
         if (strchr(SPECIAL_TOKENS, content[i]) != NULL) {
             count++;
             i++;
@@ -101,6 +107,7 @@ char** string_tokens(char *content, int *length) {
 
         // Senão, acumula até achar espaço ou caractere especial
         while (content[i] != '\0' &&
+               content[i] != '\n' &&
                !isspace(content[i]) &&
                strchr(SPECIAL_TOKENS, content[i]) == NULL) {
             i++;
@@ -118,7 +125,15 @@ char** string_tokens(char *content, int *length) {
     i = 0;
     int idx = 0;
     while (content[i] != '\0' && idx < count) {
-        if (isspace(content[i])) {
+        if (content[i] == ' ' || content[i] == '\t') {
+            i++;
+            continue;
+        }
+
+        if (content[i] == '\n') {
+            tokens[idx] = safe_malloc(3); // espaço para "\\n" e '\0'
+            strcpy(tokens[idx], "\\n");   // representação visual
+            idx++;
             i++;
             continue;
         }
@@ -134,6 +149,7 @@ char** string_tokens(char *content, int *length) {
 
         int start = i;
         while (content[i] != '\0' &&
+               content[i] != '\n' &&
                !isspace(content[i]) &&
                strchr(SPECIAL_TOKENS, content[i]) == NULL) {
             i++;
@@ -375,7 +391,23 @@ int main() {
             int i = 0;
             while (i < length) {
                 char *cleaned = clear_token(tokens[i]);
-                if (strncmp(tokens[i], "“", strlen("“")) == 0) {
+                if (strcmp(tokens[i], "\\n") == 0) {
+                    if (i == 0) {
+                        // Permitir quebra de linha no início
+                        printf("tokens[%d] = \"%s\" -> NEWLINE\n", i, tokens[i]);
+                    } else {
+                        // Pega o token anterior
+                        char *prev = tokens[i - 1];
+                        if (strcmp(prev, ";") != 0 && strcmp(prev, "{") != 0 && strcmp(prev, "}") != 0 && strcmp(prev, "\\n") != 0) {
+                            printf("tokens[%d] = \"%s\" -> SYNTAX ERROR (ausência de ; após '%s')\n", i, tokens[i], prev);
+                            break;
+                        } else {
+                            printf("tokens[%d] = \"%s\" -> NEWLINE\n", i, tokens[i]);
+                        }
+                    }
+                    i++;
+                    continue;
+                } else if (strncmp(tokens[i], "“", strlen("“")) == 0) {
                     printf("tokens[%d] = \"%s\" -> STRING\n", i, tokens[i]);
                     i++;
                     while (i < length) {
