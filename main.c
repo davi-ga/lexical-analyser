@@ -15,7 +15,7 @@ const char* const KEYWORDS[] = {"principal", "inteiro", "retorno", "escreva", "l
 const int NUM_KEYWORDS = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
 // const char DELIMITERS[] = " ()\\{};\n\r";
 const char DELIMITERS[] = " ";
-const char SPECIAL_TOKENS[] = "()\\{};\n\r";
+const char SPECIAL_TOKENS[] = "()\\{};\n\r\"";
 
 void* safe_malloc(size_t size) {
     if (memory + size > MAX_MEMORY) {
@@ -315,13 +315,28 @@ char* suggest_keyword(char *token) {
     return best_match;
 }
 
-int check_brackets(char **tokens, int length) {
+int check_brackets_and_quotes(char **tokens, int length) {
     char stack[length]; 
-    int top = -1;       
+    int top = -1;
+    int inside_quote = 0; // flag para saber se estamos dentro de uma string
 
     for (int i = 0; i < length; i++) {
         char *tok = tokens[i];
 
+        // Verifica aspas
+        if (strcmp(tok, "\"") == 0) {
+            if (!inside_quote) {
+                inside_quote = 1; // abre string
+            } else {
+                inside_quote = 0; // fecha string
+            }
+            continue;
+        }
+
+        // Se estamos dentro de string, ignoramos os tokens de bracket
+        if (inside_quote) continue;
+
+        // Verifica parênteses e chaves
         if (strcmp(tok, "(") == 0 || strcmp(tok, "[") == 0 || strcmp(tok, "{") == 0) {
             stack[++top] = tok[0];
         }
@@ -340,6 +355,11 @@ int check_brackets(char **tokens, int length) {
                 return 0; 
             }
         }
+    }
+
+    if (inside_quote) {
+        printf("Erro: string aberta sem fechamento (\")\n");
+        return 0;
     }
 
     if (top != -1) {
@@ -484,7 +504,7 @@ int main() {
                 i++;
             }
 
-            check_brackets(tokens, length);
+            check_brackets_and_quotes(tokens, length);
 
             for (int j = 0; j < length; j++) {
                 free(tokens[j]);
