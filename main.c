@@ -13,7 +13,9 @@ size_t memory = sizeof(memory);
 // Arrays globais para evitar repetição
 const char* const KEYWORDS[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao", "senao", "se", "para"};
 const int NUM_KEYWORDS = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
-const char DELIMITERS[] = " ()\\{};\n\r";
+// const char DELIMITERS[] = " ()\\{};\n\r";
+const char DELIMITERS[] = " ";
+const char SPECIAL_TOKENS[] = "()\\{};\n\r";
 
 void* safe_malloc(size_t size) {
     if (memory + size > MAX_MEMORY) {
@@ -77,49 +79,72 @@ int is_variable(const char *token) {
 }
 
 char** string_tokens(char *content, int *length) {
-    if (content == NULL || length == NULL) {
-        return NULL;
-    }
-    
-    // Primeiro, conta quantos tokens existem
+    if (content == NULL || length == NULL) return NULL;
+
     int count = 0;
-    char *temp = safe_malloc(strlen(content) + 1);
-    strcpy(temp, content);
-    
-    char *token = strtok(temp, DELIMITERS);
-    while (token != NULL) {
+
+    // contar tokens
+    int i = 0;
+    while (content[i] != '\0') {
+        // Pula espaços
+        if (isspace(content[i])) {
+            i++;
+            continue;
+        }
+
+        // Se for caractere especial, já é um token
+        if (strchr(SPECIAL_TOKENS, content[i]) != NULL) {
+            count++;
+            i++;
+            continue;
+        }
+
+        // Senão, acumula até achar espaço ou caractere especial
+        while (content[i] != '\0' &&
+               !isspace(content[i]) &&
+               strchr(SPECIAL_TOKENS, content[i]) == NULL) {
+            i++;
+        }
         count++;
-        token = strtok(NULL, DELIMITERS);
     }
-    free(temp);
-    
+
     if (count == 0) {
         *length = 0;
         return NULL;
     }
-    
-    // Aloca array para armazenar ponteiros para strings
+
+    // armazenar tokens 
     char **tokens = safe_malloc(count * sizeof(char*));
-    if (tokens == NULL) {
-        *length = 0;
-        return NULL;
+    i = 0;
+    int idx = 0;
+    while (content[i] != '\0' && idx < count) {
+        if (isspace(content[i])) {
+            i++;
+            continue;
+        }
+
+        if (strchr(SPECIAL_TOKENS, content[i]) != NULL) {
+            tokens[idx] = safe_malloc(2);
+            tokens[idx][0] = content[i];
+            tokens[idx][1] = '\0';
+            idx++;
+            i++;
+            continue;
+        }
+
+        int start = i;
+        while (content[i] != '\0' &&
+               !isspace(content[i]) &&
+               strchr(SPECIAL_TOKENS, content[i]) == NULL) {
+            i++;
+        }
+        int len = i - start;
+        tokens[idx] = safe_malloc(len + 1);
+        strncpy(tokens[idx], &content[start], len);
+        tokens[idx][len] = '\0';
+        idx++;
     }
-    
-    // Segunda passada para extrair os tokens
-    temp = safe_malloc(strlen(content) + 1);
-    strcpy(temp, content);
-    
-    int index = 0;
-    token = strtok(temp, DELIMITERS);
-    while (token != NULL && index < count) {
-        // Aloca memória e copia o token
-        tokens[index] = safe_malloc(strlen(token) + 1);
-        strcpy(tokens[index], token);
-        index++;
-        token = strtok(NULL, DELIMITERS);
-    }
-    
-    free(temp);
+
     *length = count;
     return tokens;
 }
@@ -274,6 +299,35 @@ char* suggest_keyword(char *token) {
     return best_match;
 }
 
+int check_brackets(char **tokens, int length) {
+    char stack[length];   // pilha simples
+    int top = -1;         // índice do topo da pilha
+
+    for (int i = 0; i < length; i++) {
+        char *tok = tokens[i];
+
+        // Aberturas → empilha
+        if (strcmp(tok, "(") == 0 || strcmp(tok, "[") == 0 || strcmp(tok, "{") == 0) {
+            stack[++top] = tok[0];
+        }
+
+        // Fechamentos → verifica pilha
+        else if (strcmp(tok, ")") == 0 || strcmp(tok, "]") == 0 || strcmp(tok, "}") == 0) {
+            if (top < 0) return 0; // nada pra fechar
+
+            char open = stack[top--]; // desempilha
+
+            if ((strcmp(tok, ")") == 0 && open != '(') ||
+                (strcmp(tok, "]") == 0 && open != '[') ||
+                (strcmp(tok, "}") == 0 && open != '{')) {
+                return 0; // par errado
+            }
+        }
+    }
+
+    return (top == -1); // se pilha está vazia, está balanceado
+}
+
 int main() {
     DIR *dir;
     struct dirent *entry;
@@ -385,6 +439,12 @@ int main() {
                     printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
                 }
                 i++;
+            }
+
+            if (check_brackets(tokens, length)) {
+                printf("Parênteses, colchetes e chaves estão balanceados.\n");
+            } else {
+                printf("ERRO SINTÁTICO: Parênteses, colchetes ou chaves não estão balanceados.\n");
             }
 
             for (int j = 0; j < length; j++) {
