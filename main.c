@@ -550,6 +550,26 @@ int main() {
                         printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                         break;
                     }
+                } else if (strcmp(cleaned, "principal") == 0) {
+                    printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                    i++; 
+
+                    // Verifica se o próximo token é '('
+                    if (i >= length || strcmp(tokens[i], "(") != 0) {
+                        printf("tokens[%d] = \"%s\" -> SYNTAX ERROR (esperado '(' após 'principal')\n", i, tokens[i]);
+                        break; 
+                    }
+                    printf("tokens[%d] = \"%s\" -> LEFT_PAREN\n", i, tokens[i]);
+                    i++; 
+
+                    // Verifica se o próximo token é ')'
+                    if (i >= length || strcmp(tokens[i], ")") != 0) {
+                        printf("SYNTAX ERROR: '%s' inesperado dentro da declaração da função 'principal'\n", tokens[i]);
+                        printf("tokens[%d] = \"%s\" -> SYNTAX ERROR (esperado ')' após '(' em 'principal')\n", i, tokens[i]);
+                        break;
+                    }
+                    printf("tokens[%d] = \"%s\" -> RIGHT_PAREN\n", i, tokens[i]);
+                    i++; 
                 } else if (strcmp(tokens[i], ";") == 0) {
                     printf("tokens[%d] = \"%s\" -> SEMICOLON\n", i, tokens[i]);
                 } else if (strcmp(tokens[i], "+") == 0) {
@@ -607,7 +627,7 @@ int main() {
                     break;
                 } else if (is_keyword(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
-                }else {
+                } else {
                     printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
                 }
                 i++;
