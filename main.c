@@ -284,24 +284,57 @@ int has_lexical_error(char *token) {
     return 0; // Não é erro léxico
 }
 
-// void classify_tokens(char **tokens, int length) {
-//     if (tokens == NULL || length <= 0) {
-//         return;
-//     }
-
-//     printf("\nClassificação dos tokens:\n");
-//     for (int i = 0; i < length; i++) {
-//         if (is_variable(tokens[i])) {
-//             printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
-//         } else if (has_lexical_error(tokens[i])) {
-//             printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
-//         } else if (is_keyword(tokens[i])) {
-//             printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
-//         } else {
-//             printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
-//         }
-//     }
-// }
+// Função para sugerir a keyword mais próxima
+char* suggest_keyword(char *token) {
+    if (token == NULL) {
+        return NULL;
+    }
+    
+    // Array de keywords corretas
+    char *keywords[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao", "senao", "se", "para"};
+    int num_keywords = sizeof(keywords) / sizeof(keywords[0]);
+    
+    // Remove BOM UTF-8 se presente no início do token
+    char *cleaned = clear_token(token);
+    
+    // Se o token limpo está vazio, não há sugestão
+    if (strlen(cleaned) == 0) {
+        return NULL;
+    }
+    
+    // Converte o token para minúsculas para comparação
+    char *token_lower = safe_malloc(strlen(cleaned) + 1);
+    strcpy(token_lower, cleaned);
+    for (int i = 0; token_lower[i]; i++) {
+        token_lower[i] = tolower(token_lower[i]);
+    }
+    
+    int min_distance = 999;
+    char *best_match = NULL;
+    
+    // Encontra a keyword com menor distância
+    for (int i = 0; i < num_keywords; i++) {
+        int distance = levenshtein_distance(token_lower, keywords[i]);
+        int keyword_len = strlen(keywords[i]);
+        int token_len = strlen(token_lower);
+        
+        // Considera como candidato se:
+        // 1. A distância é pequena (1-2 caracteres de diferença)
+        // 2. É um prefixo próximo da keyword
+        if ((distance > 0 && distance <= 2 && keyword_len > 3) ||
+            (strncmp(token_lower, keywords[i], token_len) == 0 && 
+             token_len >= keyword_len - 2 && token_len < keyword_len)) {
+            
+            if (distance < min_distance) {
+                min_distance = distance;
+                best_match = keywords[i];
+            }
+        }
+    }
+    
+    free(token_lower);
+    return best_match;
+}
 
 int main() {
     DIR *dir;
@@ -360,7 +393,12 @@ int main() {
                         continue;
                     } else if (i + 1 < length) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
-                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i + 1, tokens[i + 1]);
+                        char *suggestion = suggest_keyword(tokens[i + 1]);
+                        if (suggestion != NULL) {
+                            printf("tokens[%d] = \"%s\" -> LEXICAL ERROR (Você quis dizer '%s'?)\n", i + 1, tokens[i + 1], suggestion);
+                        } else {
+                            printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i + 1, tokens[i + 1]);
+                        }
                         printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                         break; 
                     } else {
@@ -371,7 +409,12 @@ int main() {
                     }
                 } else if ((i + 1 < length) && strcmp(tokens[i + 1], "=") == 0) {
                     if (tokens[i][0] != '!') {
-                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+                        char *suggestion = suggest_keyword(tokens[i]);
+                        if (suggestion != NULL) {
+                            printf("tokens[%d] = \"%s\" -> LEXICAL ERROR (Você quis dizer '%s'?)\n", i, tokens[i], suggestion);
+                        } else {
+                            printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+                        }
                         printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                         break;
                     }
@@ -390,7 +433,12 @@ int main() {
                 } else if (is_variable(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
                 } else if (has_lexical_error(tokens[i])) {
-                    printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+                    char *suggestion = suggest_keyword(tokens[i]);
+                    if (suggestion != NULL) {
+                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR (Você quis dizer '%s'?)\n", i, tokens[i], suggestion);
+                    } else {
+                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i, tokens[i]);
+                    }
                     printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                     break;
                 } else if (is_keyword(tokens[i])) {

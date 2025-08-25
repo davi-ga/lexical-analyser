@@ -1,0 +1,6 @@
+funcao __principal(){
+inteiro !a = 5;
+escreva("Olá mundo";
+leia(!a;
+retorno !a;
+

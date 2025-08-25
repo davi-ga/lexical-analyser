@@ -1,0 +1,13 @@
+ALocação de forma segura, verificando o limite de 2048KB
+
+Remoção do BOM UTF8 do início dos tokens
+
+Leitura de Arquivo
+
+Transforma todo o conteúdp em Tokens usando delimitadores 
+
+Verifica se token é variável
+Verifiva se token é palavra chave
+
+Distância de Levenshtein para cálculo de erros
+    MEde o número mínimo de operações necessárias para transformar uma string em outra
