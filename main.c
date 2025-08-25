@@ -300,32 +300,43 @@ char* suggest_keyword(char *token) {
 }
 
 int check_brackets(char **tokens, int length) {
-    char stack[length];   // pilha simples
-    int top = -1;         // índice do topo da pilha
+    char stack[length]; 
+    int top = -1;       
 
     for (int i = 0; i < length; i++) {
         char *tok = tokens[i];
 
-        // Aberturas → empilha
         if (strcmp(tok, "(") == 0 || strcmp(tok, "[") == 0 || strcmp(tok, "{") == 0) {
             stack[++top] = tok[0];
         }
-
-        // Fechamentos → verifica pilha
         else if (strcmp(tok, ")") == 0 || strcmp(tok, "]") == 0 || strcmp(tok, "}") == 0) {
-            if (top < 0) return 0; // nada pra fechar
+            if (top < 0) {
+                printf("Erro: encontrou '%s' sem abertura correspondente\n", tok);
+                return 0;
+            }
 
-            char open = stack[top--]; // desempilha
+            char open = stack[top--]; 
 
             if ((strcmp(tok, ")") == 0 && open != '(') ||
                 (strcmp(tok, "]") == 0 && open != '[') ||
                 (strcmp(tok, "}") == 0 && open != '{')) {
-                return 0; // par errado
+                printf("Erro: '%c' não combina com '%s'\n", open, tok);
+                return 0; 
             }
         }
     }
 
-    return (top == -1); // se pilha está vazia, está balanceado
+    if (top != -1) {
+        char open = stack[top];
+        char expected;
+        if (open == '(') expected = ')';
+        else if (open == '[') expected = ']';
+        else expected = '}';
+        printf("Faltou fechar com '%c'\n", expected);
+        return 0;
+    }
+
+    return 1; 
 }
 
 int main() {
@@ -441,11 +452,7 @@ int main() {
                 i++;
             }
 
-            if (check_brackets(tokens, length)) {
-                printf("Parênteses, colchetes e chaves estão balanceados.\n");
-            } else {
-                printf("ERRO SINTÁTICO: Parênteses, colchetes ou chaves não estão balanceados.\n");
-            }
+            check_brackets(tokens, length);
 
             for (int j = 0; j < length; j++) {
                 free(tokens[j]);
