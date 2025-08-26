@@ -596,7 +596,13 @@ int main() {
                         break;
                     }
                     printf("tokens[%d] = \"%s\" -> RIGHT_PAREN\n", i, tokens[i]);
-                    i++; 
+                    if (tokens[i+1] == NULL || strcmp(tokens[i+1], "{") != 0) {
+                        printf("tokens[%d] = \"%s\" -> ERRO: esperado '{' após 'principal()'\n", i+1, tokens[i+1]);
+                        break;
+                    } 
+                    i++;
+                    printf("tokens[%d] = \"%s\" -> LEFT_BRACE\n", i, tokens[i]);
+                    i++;
                 } else if (strcmp(tokens[i], ";") == 0) {
                     printf("tokens[%d] = \"%s\" -> SEMICOLON\n", i, tokens[i]);
                 } else if (strcmp(tokens[i], "+") == 0) {
