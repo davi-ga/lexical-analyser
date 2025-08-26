@@ -526,12 +526,12 @@ int main() {
                     }
                     i++;
                     continue;
-                } else if (strncmp(tokens[i], "“", strlen("“")) == 0) {
+                } else if (strncmp(tokens[i], "\"", strlen("\"")) == 0) {
                     printf("tokens[%d] = \"%s\" -> STRING\n", i, tokens[i]);
                     i++;
                     while (i < length) {
                         size_t len = strlen(tokens[i]);
-                        if (len >= strlen("”") && strcmp(&tokens[i][len - strlen("”")], "”") == 0) {
+                        if (len >= strlen("\"") && strcmp(&tokens[i][len - strlen("\"")], "\"") == 0) {
                             printf("tokens[%d] = \"%s\" -> STRING\n", i, tokens[i]);
                             break;
                         } else {
@@ -543,6 +543,11 @@ int main() {
                     if (i + 1 < length && strncmp(tokens[i + 1], "__", 2) == 0) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
                         printf("tokens[%d] = \"%s\" -> FUNC_NAME\n", i + 1, tokens[i + 1]);
+                        // if (strncmp(tokens[i + 2], "(", 1) == 0) {
+                        //     printf("tokens[%d] = \"%s\" -> LEFT_PAREN\n", i + 2, tokens[i + 2]);
+                        // } else {
+                        //     printf("tokens[%d] = \"%s\" -> ERRO LEXICO - Esperado '(' após função\n", i + 2, tokens[i + 2]);
+                        // }
                         i += 2; 
                         continue;
                     } else if (i + 1 < length) {
@@ -641,6 +646,7 @@ int main() {
                     if (tokens[i+1] != NULL && strncmp(tokens[i+1], "(", 1) == 0) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD_FUNC\n", i, tokens[i]);
                         printf("tokens[%d] = \"%s\" -> KEYWORD_FUNC_LEFT_PAREN\n", i, tokens[i+1]);
+                        i++;
                     } else {
                         printf("tokens[%d] = \"%s\" -> FUNC\n", i, tokens[i]);
                         printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperado '(' após nome de função\n", i + 1, tokens[i+1]);
