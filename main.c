@@ -114,6 +114,17 @@ char** string_tokens(char *content, int *length) {
             continue;
         }
 
+        for (int i = 0; content[i] != '\0'; i++) {
+            if ((unsigned char)content[i] == 0xE2  && (unsigned char)content[i+1] == 0x80 && 
+                ((unsigned char)content[i+2] == 0x9C || (unsigned char)content[i+2] == 0x9D)) {
+                content[i] = '"';
+            }
+        }
+        
+        // if (strchr(0xE2, (unsigned char)content[i]) != NULL && strchr(0x80, (unsigned char)content[i+1]) != NULL && (strchr(0x9C, (unsigned char)content[i+2]) != NULL || strchr(0x9D, (unsigned char)content[i+2]) != NULL)) {
+        //     content[i] = '"';
+        // }
+
         // Se for outro caractere especial, já é um token
         if (strchr(SPECIAL_TOKENS, content[i]) != NULL) {
             count++;
@@ -174,6 +185,17 @@ char** string_tokens(char *content, int *length) {
         tokens[idx] = safe_malloc(len + 1);
         strncpy(tokens[idx], &content[start], len);
         tokens[idx][len] = '\0';
+
+        char *p = tokens[idx];
+        while (*p){
+            if ((unsigned char)p[0] == 0xE2 && (unsigned char)p[1] == 0x80 &&
+                ((unsigned char)p[2] == 0x9C || (unsigned char)p[2] == 0x9D)) {
+                p[0] = '"';
+                memmove(p+1, p+3, strlen(p+3)+1);
+            } else {
+                p++;
+            }
+        }
         idx++;
     }
 
@@ -614,6 +636,16 @@ int main() {
                     printf("tokens[%d] = \"%s\" -> RIGHT_BRACE\n", i, tokens[i]);
                 } else if (isdigit(tokens[i][0])) {
                     printf("tokens[%d] = \"%s\" -> INTEGER\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "leia") == 0 || strcmp(tokens[i], "escreva") == 0 || strcmp(tokens[i], "se") == 0 || strcmp(tokens[i], "para") == 0) {
+                    // Verifica se a próxima string começa com '('
+                    if (tokens[i+1] != NULL && strncmp(tokens[i+1], "(", 1) == 0) {
+                        printf("tokens[%d] = \"%s\" -> KEYWORD_FUNC\n", i, tokens[i]);
+                        printf("tokens[%d] = \"%s\" -> KEYWORD_FUNC_LEFT_PAREN\n", i, tokens[i+1]);
+                    } else {
+                        printf("tokens[%d] = \"%s\" -> FUNC\n", i, tokens[i]);
+                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperado '(' após nome de função\n", i + 1, tokens[i+1]);
+                        break;
+                    }
                 } else if (strcmp(tokens[i], "inteiro") == 0) {
                     // Verifica se a próxima string começa com '!'
                     if (tokens[i+1] != NULL && strncmp(tokens[i+1], "!", 1) == 0) {
