@@ -34,6 +34,9 @@ typedef struct Symbol {
     int scope_level;
     int line_declared;
     bool is_used;
+    int param_count;  
+    char **param_names;
+    DataType *param_types; 
     struct Symbol *next;
 } Symbol;
 
@@ -49,6 +52,7 @@ SymbolTable symbol_table = {0};
 // Declarações de função
 void* safe_malloc(size_t size);
 Symbol* lookup_symbol_current_scope(const char *name);
+int is_variable(const char *token);
 
 // Funções da tabela de símbolos
 unsigned int hash_function(const char *name) {
@@ -76,6 +80,9 @@ Symbol* create_symbol(const char *name, SymbolType symbol_type, DataType data_ty
     new_symbol->scope_level = symbol_table.current_scope;
     new_symbol->line_declared = line;
     new_symbol->is_used = false;
+    new_symbol->param_count = 0;
+    new_symbol->param_names = NULL;
+    new_symbol->param_types = NULL;
     new_symbol->next = NULL;
     return new_symbol;
 }
@@ -208,22 +215,222 @@ void update_parameter_type(const char *param_name, DataType new_type) {
     }
 }
 
+void add_function_parameter(const char *func_name, const char *param_name, DataType param_type) {
+    Symbol *func = lookup_symbol(func_name);
+    if (func != NULL && func->symbol_type == SYMBOL_FUNCTION) {
+        func->param_count++;
+        
+        // Realoca arrays para acomodar novo parâmetro
+        func->param_names = realloc(func->param_names, func->param_count * sizeof(char*));
+        func->param_types = realloc(func->param_types, func->param_count * sizeof(DataType));
+        
+        // Adiciona o novo parâmetro
+        func->param_names[func->param_count - 1] = safe_malloc(strlen(param_name) + 1);
+        strcpy(func->param_names[func->param_count - 1], param_name);
+        func->param_types[func->param_count - 1] = param_type;
+    }
+}
+
+bool validate_function_call(const char *func_name, int provided_params, int line) {
+    Symbol *func = lookup_symbol(func_name);
+    if (func == NULL) {
+        printf("SEMANTIC ERROR (linha %d): Função '%s' não declarada\n", line, func_name);
+        return false;
+    }
+    
+    if (func->symbol_type != SYMBOL_FUNCTION) {
+        printf("SEMANTIC ERROR (linha %d): '%s' não é uma função\n", line, func_name);
+        return false;
+    }
+    
+    if (func->param_count != provided_params) {
+        printf("SEMANTIC ERROR (linha %d): Função '%s' espera %d parâmetros, mas %d foram fornecidos\n", 
+               line, func_name, func->param_count, provided_params);
+        return false;
+    }
+    
+    func->is_used = true;
+    return true;
+}
+
+bool validate_function_declaration(const char *func_name) {
+    // Verifica se o nome da função segue o padrão (deve começar com __)
+    if (strncmp(func_name, "__", 2) != 0) {
+        printf("SEMANTIC ERROR: Nome de função '%s' deve começar com '__'\n", func_name);
+        return false;
+    }
+    
+    // Verifica se não é apenas "__"
+    if (strlen(func_name) <= 2) {
+        printf("SEMANTIC ERROR: Nome de função '%s' é inválido (muito curto)\n", func_name);
+        return false;
+    }
+    
+    return true;
+}
+
+bool is_parameter_redeclaration(const char *var_name) {
+    // Verifica se a variável é um parâmetro no escopo atual
+    Symbol *existing = lookup_symbol(var_name);
+    if (existing != NULL && existing->symbol_type == SYMBOL_PARAMETER && 
+        existing->scope_level == symbol_table.current_scope) {
+        return true;
+    }
+    return false;
+}
+
+bool validate_parameter_list(char **tokens, int start_idx, int end_idx) {
+    // Valida se os parâmetros estão corretamente separados por vírgulas
+    bool expecting_param = true;
+    bool expecting_comma = false;
+    
+    for (int i = start_idx; i <= end_idx; i++) {
+        if (expecting_param) {
+            if (is_variable(tokens[i])) {
+                expecting_param = false;
+                expecting_comma = true;
+            } else {
+                printf("SYNTAX ERROR: Esperado parâmetro na posição %d, encontrado '%s'\n", i, tokens[i]);
+                return false;
+            }
+        } else if (expecting_comma) {
+            if (strcmp(tokens[i], ",") == 0) {
+                expecting_param = true;
+                expecting_comma = false;
+            } else if (strcmp(tokens[i], ")") == 0) {
+                break; // Final da lista de parâmetros
+            } else {
+                printf("SYNTAX ERROR: Esperada vírgula após parâmetro, encontrado '%s'\n", tokens[i]);
+                return false;
+            }
+        }
+    }
+    
+    if (expecting_param) {
+        printf("SYNTAX ERROR: Lista de parâmetros incompleta - esperado parâmetro após vírgula\n");
+        return false;
+    }
+    
+    return true;
+}
+
+bool validate_leia_command(char **tokens, int start_idx, int *end_idx, int current_line) {
+    // 4.3. Haverá sempre um duplo balanceamento utilizando os parênteses
+    if (start_idx >= *end_idx || strcmp(tokens[start_idx], "(") != 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'leia' deve ser seguido por '('\n", current_line);
+        return false;
+    }
+    
+    int i = start_idx + 1;
+    int paren_count = 1;
+    int close_paren_pos = -1;
+    bool expecting_variable = true;
+    bool expecting_comma = false;
+    int var_count = 0;
+    
+    // Procura o fechamento dos parênteses e valida o conteúdo
+    while (i < *end_idx && paren_count > 0) {
+        if (strcmp(tokens[i], "(") == 0) {
+            paren_count++;
+        } else if (strcmp(tokens[i], ")") == 0) {
+            paren_count--;
+            if (paren_count == 0) {
+                close_paren_pos = i;
+                break;
+            }
+        } else if (paren_count == 1) { // Apenas no nível principal dos parênteses
+            if (expecting_variable) {
+                if (is_variable(tokens[i])) {
+                    // 4.1. Variáveis devem ser declaradas anteriormente
+                    char *var_name = safe_malloc(strlen(tokens[i]) + 1);
+                    strcpy(var_name, tokens[i]);
+                    char *comma = strchr(var_name, ',');
+                    if (comma) *comma = '\0';
+                    
+                    Symbol *var = lookup_symbol(var_name);
+                    if (var == NULL) {
+                        printf("SEMANTIC ERROR (linha %d): Variável '%s' não foi declarada\n", current_line, var_name);
+                        free(var_name);
+                        return false;
+                    }
+                    
+                    // 4.2. Não podem ser feitas declarações dentro da estrutura de leitura
+                    if (var->symbol_type != SYMBOL_VARIABLE && var->symbol_type != SYMBOL_PARAMETER) {
+                        printf("SEMANTIC ERROR (linha %d): '%s' não é uma variável válida para leitura\n", current_line, var_name);
+                        free(var_name);
+                        return false;
+                    }
+                    
+                    var->is_used = true;
+                    var_count++;
+                    expecting_variable = false;
+                    expecting_comma = true;
+                    free(var_name);
+                } else {
+                    printf("SYNTAX ERROR (linha %d): Esperada variável no comando 'leia', encontrado '%s'\n", current_line, tokens[i]);
+                    return false;
+                }
+            } else if (expecting_comma) {
+                if (strcmp(tokens[i], ",") == 0) {
+                    expecting_variable = true;
+                    expecting_comma = false;
+                } else {
+                    printf("SYNTAX ERROR (linha %d): Esperada vírgula entre variáveis no comando 'leia', encontrado '%s'\n", current_line, tokens[i]);
+                    return false;
+                }
+            }
+        }
+        i++;
+    }
+    
+    if (close_paren_pos == -1) {
+        printf("SYNTAX ERROR (linha %d): Comando 'leia' sem fechamento de parênteses\n", current_line);
+        return false;
+    }
+    
+    if (expecting_variable && var_count > 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'leia' termina com vírgula sem variável\n", current_line);
+        return false;
+    }
+    
+    if (var_count == 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'leia' deve ter pelo menos uma variável\n", current_line);
+        return false;
+    }
+    
+    // 4.4. A linha deve ser finalizada com ponto e vírgula
+    if (close_paren_pos + 1 < *end_idx && strcmp(tokens[close_paren_pos + 1], ";") != 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'leia' deve ser finalizado com ';'\n", current_line);
+        return false;
+    }
+    
+    *end_idx = close_paren_pos + 1; // Atualiza a posição final
+    return true;
+}
+
 void print_symbol_table() {
     printf("\n======== TABELA DE SÍMBOLOS ========\n");
-    printf("%-20s %-12s %-10s %-8s %-8s %-8s\n", 
-           "NOME", "TIPO_SIMBOLO", "TIPO_DADO", "ESCOPO", "LINHA", "USADO");
-    printf("--------------------------------------------------------------------\n");
+    printf("%-20s %-12s %-10s %-8s %-8s %-8s %-15s\n", 
+           "NOME", "TIPO_SIMBOLO", "TIPO_DADO", "ESCOPO", "LINHA", "USADO", "PARÂMETROS");
+    printf("--------------------------------------------------------------------------------\n");
     
     for (int i = 0; i < MAX_SYMBOLS; i++) {
         Symbol *current = symbol_table.symbols[i];
         while (current != NULL) {
-            printf("%-20s %-12s %-10s %-8d %-8d %-8s\n",
+            char param_info[100] = "";
+            
+            if (current->symbol_type == SYMBOL_FUNCTION && current->param_count > 0) {
+                snprintf(param_info, sizeof(param_info), "(%d params)", current->param_count);
+            }
+            
+            printf("%-20s %-12s %-10s %-8d %-8d %-8s %-15s\n",
                    current->name,
                    symbol_type_to_string(current->symbol_type),
                    data_type_to_string(current->data_type),
                    current->scope_level,
                    current->line_declared,
-                   current->is_used ? "SIM" : "NAO");
+                   current->is_used ? "SIM" : "NAO",
+                   param_info);
             current = current->next;
         }
     }
@@ -775,16 +982,41 @@ int main() {
                 } else if (strcmp(cleaned, "funcao") == 0) {
                     if (i + 1 < length && strncmp(tokens[i + 1], "__", 2) == 0) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                        
+                        // Valida o nome da função
+                        if (!validate_function_declaration(tokens[i + 1])) {
+                            printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                            break;
+                        }
+                        
                         printf("tokens[%d] = \"%s\" -> FUNC_NAME\n", i + 1, tokens[i + 1]);
                         
                         // Adiciona função à tabela de símbolos
                         add_symbol(tokens[i + 1], SYMBOL_FUNCTION, TYPE_VOID, current_line);
                         enter_scope(); // Entra no escopo da função
                         
+                        char *current_function = tokens[i + 1];
+                        
                         // Processa parâmetros da função se houver
                         i += 2;
                         if (i < length && strcmp(tokens[i], "(") == 0) {
-                            i++; // pula o '('
+                            int start_params = i + 1;
+                            int end_params = i + 1;
+                            
+                            // Encontra o final da lista de parâmetros
+                            while (end_params < length && strcmp(tokens[end_params], ")") != 0) {
+                                end_params++;
+                            }
+                            
+                            // Valida a lista de parâmetros se não estiver vazia
+                            if (end_params > start_params) {
+                                if (!validate_parameter_list(tokens, start_params, end_params - 1)) {
+                                    printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                                    break;
+                                }
+                            }
+                            
+                            i = start_params; // volta para processar os parâmetros
                             while (i < length && strcmp(tokens[i], ")") != 0) {
                                 if (is_variable(tokens[i])) {
                                     // Remove vírgula do nome da variável se presente
@@ -793,9 +1025,15 @@ int main() {
                                     char *comma = strchr(param_name, ',');
                                     if (comma) *comma = '\0';
                                     
-                                    add_symbol(param_name, SYMBOL_PARAMETER, TYPE_UNKNOWN, current_line);
+                                    // Adiciona parâmetro à tabela de símbolos
+                                    add_symbol(param_name, SYMBOL_PARAMETER, TYPE_INTEGER, current_line);
+                                    // Adiciona parâmetro à função
+                                    add_function_parameter(current_function, param_name, TYPE_INTEGER);
+                                    
                                     printf("tokens[%d] = \"%s\" -> PARAMETER\n", i, tokens[i]);
                                     free(param_name);
+                                } else if (strcmp(tokens[i], ",") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> COMMA\n", i, tokens[i]);
                                 }
                                 i++;
                             }
@@ -806,12 +1044,7 @@ int main() {
                         continue;
                     } else if (i + 1 < length) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
-                        char *suggestion = suggest_keyword(tokens[i + 1]);
-                        if (suggestion != NULL) {
-                            printf("tokens[%d] = \"%s\" -> LEXICAL ERROR (Você quis dizer '%s'?)\n", i + 1, tokens[i + 1], suggestion);
-                        } else {
-                            printf("tokens[%d] = \"%s\" -> LEXICAL ERROR\n", i + 1, tokens[i + 1]);
-                        }
+                        printf("tokens[%d] = \"%s\" -> SEMANTIC ERROR (Nome de função deve começar com '__')\n", i + 1, tokens[i + 1]);
                         printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                         break; 
                     } else {
@@ -927,7 +1160,37 @@ int main() {
                     exit_scope(); // Sai do escopo atual
                 } else if (isdigit(tokens[i][0])) {
                     printf("tokens[%d] = \"%s\" -> INTEGER\n", i, tokens[i]);
-                } else if (strcmp(tokens[i], "leia") == 0 || strcmp(tokens[i], "escreva") == 0 || strcmp(tokens[i], "se") == 0 || strcmp(tokens[i], "para") == 0) {
+                } else if (strcmp(tokens[i], "leia") == 0) {
+                    // Processamento específico para o comando leia
+                    printf("tokens[%d] = \"%s\" -> LEIA_COMMAND\n", i, tokens[i]);
+                    
+                    if (i + 1 < length) {
+                        int end_pos = length - 1;
+                        if (validate_leia_command(tokens, i + 1, &end_pos, current_line)) {
+                            // Processa tokens validados do comando leia
+                            for (int j = i + 1; j <= end_pos; j++) {
+                                if (strcmp(tokens[j], "(") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> LEFT_PAREN\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ")") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> RIGHT_PAREN\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ",") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> COMMA\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ";") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> SEMICOLON\n", j, tokens[j]);
+                                } else if (is_variable(tokens[j])) {
+                                    printf("tokens[%d] = \"%s\" -> VARIABLE (leitura)\n", j, tokens[j]);
+                                }
+                            }
+                            i = end_pos; // Pula para o final do comando processado
+                        } else {
+                            printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                            break;
+                        }
+                    } else {
+                        printf("SYNTAX ERROR: Comando 'leia' incompleto\n");
+                        break;
+                    }
+                } else if (strcmp(tokens[i], "escreva") == 0 || strcmp(tokens[i], "se") == 0 || strcmp(tokens[i], "para") == 0) {
                     // Verifica se a próxima string começa com '('
                     if (tokens[i+1] != NULL && strncmp(tokens[i+1], "(", 1) == 0) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD_FUNC\n", i, tokens[i]);
@@ -956,6 +1219,15 @@ int main() {
                             strcpy(var_name, tokens[i]);
                             char *comma = strchr(var_name, ',');
                             if (comma) *comma = '\0';
+                            
+                            // Verifica se é redeclaração de parâmetro
+                            if (is_parameter_redeclaration(var_name)) {
+                                printf("tokens[%d] = \"%s\" -> SEMANTIC ERROR (Parâmetro '%s' não deve ser redeclarado dentro da função)\n", 
+                                       i, tokens[i], var_name);
+                                printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                                free(var_name);
+                                break;
+                            }
                             
                             // Adiciona variável à tabela de símbolos
                             if (add_symbol(var_name, SYMBOL_VARIABLE, var_type, current_line)) {
@@ -1000,6 +1272,40 @@ int main() {
                     break;
                 } else if (is_keyword(tokens[i])) {
                     printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                } else if (strncmp(tokens[i], "__", 2) == 0) {
+                    // Possível chamada de função
+                    if (i + 1 < length && strcmp(tokens[i + 1], "(") == 0) {
+                        // Conta parâmetros na chamada
+                        int param_count = 0;
+                        int j = i + 2; // Pula o '('
+                        int paren_level = 1;
+                        
+                        while (j < length && paren_level > 0) {
+                            if (strcmp(tokens[j], "(") == 0) {
+                                paren_level++;
+                            } else if (strcmp(tokens[j], ")") == 0) {
+                                paren_level--;
+                            } else if (strcmp(tokens[j], ",") == 0 && paren_level == 1) {
+                                param_count++;
+                            } else if (paren_level == 1 && strcmp(tokens[j], ",") != 0 && 
+                                     strcmp(tokens[j], "(") != 0 && strcmp(tokens[j], ")") != 0) {
+                                // Se há pelo menos um parâmetro não-vazio
+                                if (param_count == 0) param_count = 1;
+                            }
+                            j++;
+                        }
+                        
+                        // Se havia vírgulas, incrementa para contar o último parâmetro
+                        if (param_count > 0 && j > i + 3) param_count++;
+                        
+                        if (validate_function_call(tokens[i], param_count, current_line)) {
+                            printf("tokens[%d] = \"%s\" -> FUNCTION_CALL (%d parâmetros)\n", i, tokens[i], param_count);
+                        } else {
+                            printf("tokens[%d] = \"%s\" -> SEMANTIC ERROR (Chamada de função inválida)\n", i, tokens[i]);
+                        }
+                    } else {
+                        printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
+                    }
                 } else {
                     printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
                 }
