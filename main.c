@@ -63,6 +63,13 @@ SymbolTable symbol_table = {0};
 // Declarações de função
 void* safe_malloc(size_t size);
 Symbol* lookup_symbol_current_scope(const char *name);
+Symbol* lookup_symbol(const char *name);
+bool add_symbol(const char *name, SymbolType symbol_type, DataType data_type, int line);
+void enter_scope();
+void exit_scope();
+DataType string_to_data_type(const char *type_str);
+bool validate_function_call(const char *func_name, int provided_params, int line);
+bool validate_function_declaration(const char *func_name);
 int is_variable(const char *token);
 bool validate_leia_command(char **tokens, int start_idx, int *end_idx, int current_line);
 bool validate_escreva_command(char **tokens, int start_idx, int *end_idx, int current_line);
@@ -116,6 +123,184 @@ bool validate_double_balancing(char **tokens, int start_idx, int end_idx, bool c
     // Verifica se todos estão balanceados
     if (check_quotes && quote_count % 2 != 0) return false; // Aspas não balanceadas
     return (paren_count == 0 && brace_count == 0 && bracket_count == 0);
+}
+
+// Adiciona uma chamada de função pendente
+void add_pending_function_call(const char *func_name, int param_count, int line_number) {
+    PendingFunctionCall *new_call = safe_malloc(sizeof(PendingFunctionCall));
+    new_call->function_name = safe_malloc(strlen(func_name) + 1);
+    strcpy(new_call->function_name, func_name);
+    new_call->param_count = param_count;
+    new_call->line_number = line_number;
+    new_call->next = pending_calls;
+    pending_calls = new_call;
+}
+
+// Procura uma função em todo o arquivo de tokens
+bool find_function_definition(char **tokens, int length, const char *func_name, int *func_start, int *func_end) {
+    for (int i = 0; i < length - 1; i++) {
+        if (strcmp(tokens[i], "funcao") == 0 && i + 1 < length && 
+            strcmp(tokens[i + 1], func_name) == 0) {
+            
+            *func_start = i;
+            
+            // Procura o final da função (fechamento da chave)
+            int brace_count = 0;
+            bool found_opening = false;
+            
+            for (int j = i + 2; j < length; j++) {
+                if (strcmp(tokens[j], "{") == 0) {
+                    if (!found_opening) found_opening = true;
+                    brace_count++;
+                } else if (strcmp(tokens[j], "}") == 0) {
+                    brace_count--;
+                    if (found_opening && brace_count == 0) {
+                        *func_end = j;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// Valida uma função específica encontrada no arquivo
+bool validate_found_function(char **tokens, int func_start, int func_end, int current_line) {
+    // Salva o estado atual da tabela de símbolos
+    int original_scope = symbol_table.current_scope;
+    
+    // Cria um novo escopo para a função
+    enter_scope();
+    
+    // Processa a declaração da função
+    int i = func_start;
+    if (strcmp(tokens[i], "funcao") == 0) {
+        i++; // Pula "funcao"
+        
+        if (i < func_end && strncmp(tokens[i], "__", 2) == 0) {
+            if (!validate_function_declaration(tokens[i])) {
+                exit_scope();
+                symbol_table.current_scope = original_scope;
+                return false;
+            }
+            
+            // Adiciona a função à tabela de símbolos se ainda não existe
+            Symbol *existing = lookup_symbol(tokens[i]);
+            if (existing == NULL) {
+                if (!add_symbol(tokens[i], SYMBOL_FUNCTION, TYPE_VOID, current_line)) {
+                    exit_scope();
+                    symbol_table.current_scope = original_scope;
+                    return false;
+                }
+            }
+            
+            i++; // Pula nome da função
+            
+            // Processa parâmetros se houver
+            if (i < func_end && strcmp(tokens[i], "(") == 0) {
+                i++; // Pula "("
+                
+                Symbol *func_symbol = lookup_symbol(tokens[func_start + 1]);
+                if (func_symbol != NULL) {
+                    // Processa parâmetros
+                    while (i < func_end && strcmp(tokens[i], ")") != 0) {
+                        if (strcmp(tokens[i], "inteiro") == 0 || strcmp(tokens[i], "texto") == 0 || 
+                            strcmp(tokens[i], "decimal") == 0 || strcmp(tokens[i], "flutuante") == 0) {
+                            
+                            DataType param_type = string_to_data_type(tokens[i]);
+                            i++; // Pula tipo
+                            
+                            if (i < func_end && is_variable(tokens[i])) {
+                                // Adiciona parâmetro à tabela de símbolos
+                                if (!add_symbol(tokens[i], SYMBOL_PARAMETER, param_type, current_line)) {
+                                    exit_scope();
+                                    symbol_table.current_scope = original_scope;
+                                    return false;
+                                }
+                                
+                                // Adiciona à lista de parâmetros da função
+                                func_symbol->param_count++;
+                                func_symbol->param_names = realloc(func_symbol->param_names, 
+                                                                   func_symbol->param_count * sizeof(char*));
+                                func_symbol->param_types = realloc(func_symbol->param_types, 
+                                                                   func_symbol->param_count * sizeof(DataType));
+                                
+                                func_symbol->param_names[func_symbol->param_count - 1] = 
+                                    safe_malloc(strlen(tokens[i]) + 1);
+                                strcpy(func_symbol->param_names[func_symbol->param_count - 1], tokens[i]);
+                                func_symbol->param_types[func_symbol->param_count - 1] = param_type;
+                                
+                                i++; // Pula nome do parâmetro
+                            }
+                        }
+                        
+                        if (i < func_end && strcmp(tokens[i], ",") == 0) {
+                            i++; // Pula vírgula
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Restaura o escopo original
+    exit_scope();
+    symbol_table.current_scope = original_scope;
+    return true;
+}
+
+// Valida todas as chamadas pendentes
+bool validate_pending_function_calls(char **tokens, int length) {
+    PendingFunctionCall *current = pending_calls;
+    bool all_valid = true;
+    
+    while (current != NULL) {
+        Symbol *func = lookup_symbol(current->function_name);
+        
+        if (func == NULL) {
+            // 1.10. Procura a função em todo o arquivo
+            int func_start, func_end;
+            if (find_function_definition(tokens, length, current->function_name, &func_start, &func_end)) {
+                // Valida a função encontrada
+                if (validate_found_function(tokens, func_start, func_end, current->line_number)) {
+                    // Revalida a chamada agora que a função foi processada
+                    if (!validate_function_call(current->function_name, current->param_count, current->line_number)) {
+                        all_valid = false;
+                    }
+                } else {
+                    printf("SEMANTIC ERROR (linha %d): Erro na validação da função '%s'\n", 
+                           current->line_number, current->function_name);
+                    all_valid = false;
+                }
+            } else {
+                printf("SEMANTIC ERROR (linha %d): Função '%s' não encontrada em todo o arquivo\n", 
+                       current->line_number, current->function_name);
+                all_valid = false;
+            }
+        } else {
+            // Função já existe, apenas valida a chamada
+            if (!validate_function_call(current->function_name, current->param_count, current->line_number)) {
+                all_valid = false;
+            }
+        }
+        
+        current = current->next;
+    }
+    
+    return all_valid;
+}
+
+// Limpa a lista de chamadas pendentes
+void clear_pending_function_calls() {
+    PendingFunctionCall *current = pending_calls;
+    while (current != NULL) {
+        PendingFunctionCall *next = current->next;
+        free(current->function_name);
+        free(current);
+        current = next;
+    }
+    pending_calls = NULL;
 }
 
 // Funções da tabela de símbolos
@@ -2019,10 +2204,19 @@ int main() {
                         // Se há conteúdo após a última vírgula (ou se não há vírgulas mas há conteúdo)
                         if (has_content) param_count++;
                         
-                        if (validate_function_call(tokens[i], param_count, current_line)) {
-                            printf("tokens[%d] = \"%s\" -> FUNCTION_CALL (%d parâmetros)\n", i, tokens[i], param_count);
+                        // Verifica se a função existe
+                        Symbol *func = lookup_symbol(tokens[i]);
+                        if (func == NULL) {
+                            // 1.10. Adiciona à lista de chamadas pendentes para validação posterior
+                            add_pending_function_call(tokens[i], param_count, current_line);
+                            printf("tokens[%d] = \"%s\" -> FUNCTION_CALL_PENDING (%d parâmetros)\n", i, tokens[i], param_count);
                         } else {
-                            printf("tokens[%d] = \"%s\" -> SEMANTIC ERROR (Chamada de função inválida)\n", i, tokens[i]);
+                            // Função já existe, valida imediatamente
+                            if (validate_function_call(tokens[i], param_count, current_line)) {
+                                printf("tokens[%d] = \"%s\" -> FUNCTION_CALL (%d parâmetros)\n", i, tokens[i], param_count);
+                            } else {
+                                printf("tokens[%d] = \"%s\" -> SEMANTIC ERROR (Chamada de função inválida)\n", i, tokens[i]);
+                            }
                         }
                     } else {
                         printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
@@ -2041,11 +2235,21 @@ int main() {
                 printf("Verificação de 'retorno' concluída com sucesso.\n");
             }
 
+            // 1.10. Valida chamadas de função pendentes
+            if (!validate_pending_function_calls(tokens, length)) {
+                printf("Erro na validação de chamadas de função pendentes.\n");
+            } else {
+                printf("Validação de chamadas pendentes concluída com sucesso.\n");
+            }
+
             // Infere tipos de parâmetros antes de imprimir a tabela
             infer_parameter_types();
 
             // Imprime a tabela de símbolos
             print_symbol_table();
+
+            // Limpa chamadas pendentes
+            clear_pending_function_calls();
 
             for (int j = 0; j < length; j++) {
                 free(tokens[j]);
