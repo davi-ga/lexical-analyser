@@ -1,5 +1,5 @@
 ﻿
-pincipal(){ 
+pRincipal(){ 
 inteiro !d;
  escreva(“Escreva um número ”); 
 leia (!d); 

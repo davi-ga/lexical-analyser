@@ -1,6 +1,6 @@
 ﻿
 
-principal(){
+pRincipal(){
  inteiro !a, !b2 = 7; 
 inteiro !d; 
 escrev(“Escreva um número ”);

@@ -1,0 +1,15 @@
+funcao __principal(){
+inteiro !x = 10;
+inteiro !y = 20;
+texto !nome = "João";
+decimal !pi = 3.14;
+escreva("Resultado: ");
+escreva(!x + !y);
+retorno 0;
+}
+
+funcao __calcular(!a, !b){
+inteiro !resultado;
+!resultado = !a * !b;
+retorno !resultado;
+}

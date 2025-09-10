@@ -8,8 +8,235 @@
 #include <ctype.h>
 #include <stdbool.h>
 #define MAX_MEMORY (2048 * 1024) // 2048 KB em bytes
+#define MAX_SYMBOLS 1000
 
 size_t memory = sizeof(memory);
+
+// Estrutura para a tabela de símbolos
+typedef enum {
+    SYMBOL_VARIABLE,
+    SYMBOL_FUNCTION,
+    SYMBOL_PARAMETER
+} SymbolType;
+
+typedef enum {
+    TYPE_INTEGER,
+    TYPE_STRING,
+    TYPE_FLOAT,
+    TYPE_VOID,
+    TYPE_UNKNOWN
+} DataType;
+
+typedef struct Symbol {
+    char *name;
+    SymbolType symbol_type;
+    DataType data_type;
+    int scope_level;
+    int line_declared;
+    bool is_used;
+    struct Symbol *next;
+} Symbol;
+
+typedef struct SymbolTable {
+    Symbol *symbols[MAX_SYMBOLS];
+    int count;
+    int current_scope;
+} SymbolTable;
+
+// Variável global da tabela de símbolos
+SymbolTable symbol_table = {0};
+
+// Declarações de função
+void* safe_malloc(size_t size);
+Symbol* lookup_symbol_current_scope(const char *name);
+
+// Funções da tabela de símbolos
+unsigned int hash_function(const char *name) {
+    unsigned int hash = 0;
+    for (int i = 0; name[i] != '\0'; i++) {
+        hash = hash * 31 + name[i];
+    }
+    return hash % MAX_SYMBOLS;
+}
+
+void init_symbol_table() {
+    symbol_table.count = 0;
+    symbol_table.current_scope = 0;
+    for (int i = 0; i < MAX_SYMBOLS; i++) {
+        symbol_table.symbols[i] = NULL;
+    }
+}
+
+Symbol* create_symbol(const char *name, SymbolType symbol_type, DataType data_type, int line) {
+    Symbol *new_symbol = safe_malloc(sizeof(Symbol));
+    new_symbol->name = safe_malloc(strlen(name) + 1);
+    strcpy(new_symbol->name, name);
+    new_symbol->symbol_type = symbol_type;
+    new_symbol->data_type = data_type;
+    new_symbol->scope_level = symbol_table.current_scope;
+    new_symbol->line_declared = line;
+    new_symbol->is_used = false;
+    new_symbol->next = NULL;
+    return new_symbol;
+}
+
+bool add_symbol(const char *name, SymbolType symbol_type, DataType data_type, int line) {
+    // Verifica se o símbolo já existe no escopo atual
+    Symbol *existing = lookup_symbol_current_scope(name);
+    if (existing != NULL) {
+        printf("SEMANTIC ERROR: Símbolo '%s' já declarado na linha %d\n", name, existing->line_declared);
+        return false;
+    }
+    
+    unsigned int index = hash_function(name);
+    Symbol *new_symbol = create_symbol(name, symbol_type, data_type, line);
+    
+    // Inserção no início da lista ligada (tratamento de colisão)
+    new_symbol->next = symbol_table.symbols[index];
+    symbol_table.symbols[index] = new_symbol;
+    symbol_table.count++;
+    
+    return true;
+}
+
+Symbol* lookup_symbol(const char *name) {
+    unsigned int index = hash_function(name);
+    Symbol *current = symbol_table.symbols[index];
+    
+    while (current != NULL) {
+        if (strcmp(current->name, name) == 0) {
+            current->is_used = true;
+            return current;
+        }
+        current = current->next;
+    }
+    return NULL;
+}
+
+Symbol* lookup_symbol_current_scope(const char *name) {
+    unsigned int index = hash_function(name);
+    Symbol *current = symbol_table.symbols[index];
+    
+    while (current != NULL) {
+        if (strcmp(current->name, name) == 0 && 
+            current->scope_level == symbol_table.current_scope) {
+            return current;
+        }
+        current = current->next;
+    }
+    return NULL;
+}
+
+void enter_scope() {
+    symbol_table.current_scope++;
+}
+
+void exit_scope() {
+    // Remove símbolos do escopo atual
+    for (int i = 0; i < MAX_SYMBOLS; i++) {
+        Symbol *current = symbol_table.symbols[i];
+        Symbol *prev = NULL;
+        
+        while (current != NULL) {
+            if (current->scope_level == symbol_table.current_scope) {
+                if (prev == NULL) {
+                    symbol_table.symbols[i] = current->next;
+                } else {
+                    prev->next = current->next;
+                }
+                
+                if (!current->is_used) {
+                    printf("WARNING: Símbolo '%s' declarado mas não utilizado (linha %d)\n", 
+                           current->name, current->line_declared);
+                }
+                
+                free(current->name);
+                Symbol *to_delete = current;
+                current = current->next;
+                free(to_delete);
+                symbol_table.count--;
+            } else {
+                prev = current;
+                current = current->next;
+            }
+        }
+    }
+    
+    if (symbol_table.current_scope > 0) {
+        symbol_table.current_scope--;
+    }
+}
+
+const char* symbol_type_to_string(SymbolType type) {
+    switch (type) {
+        case SYMBOL_VARIABLE: return "VARIABLE";
+        case SYMBOL_FUNCTION: return "FUNCTION";
+        case SYMBOL_PARAMETER: return "PARAMETER";
+        default: return "UNKNOWN";
+    }
+}
+
+const char* data_type_to_string(DataType type) {
+    switch (type) {
+        case TYPE_INTEGER: return "INTEGER";
+        case TYPE_STRING: return "STRING";
+        case TYPE_FLOAT: return "FLOAT";
+        case TYPE_VOID: return "VOID";
+        default: return "UNKNOWN";
+    }
+}
+
+void infer_parameter_types() {
+    // Percorre a tabela de símbolos para inferir tipos de parâmetros baseado no uso
+    for (int i = 0; i < MAX_SYMBOLS; i++) {
+        Symbol *current = symbol_table.symbols[i];
+        while (current != NULL) {
+            if (current->symbol_type == SYMBOL_PARAMETER && current->data_type == TYPE_UNKNOWN) {
+                // Por padrão, assume que parâmetros são inteiros se usados em operações aritméticas
+                // Esta é uma simplificação - em um compilador real, faria análise mais sofisticada
+                current->data_type = TYPE_INTEGER;
+            }
+            current = current->next;
+        }
+    }
+}
+
+void update_parameter_type(const char *param_name, DataType new_type) {
+    Symbol *param = lookup_symbol(param_name);
+    if (param != NULL && param->symbol_type == SYMBOL_PARAMETER) {
+        param->data_type = new_type;
+    }
+}
+
+void print_symbol_table() {
+    printf("\n======== TABELA DE SÍMBOLOS ========\n");
+    printf("%-20s %-12s %-10s %-8s %-8s %-8s\n", 
+           "NOME", "TIPO_SIMBOLO", "TIPO_DADO", "ESCOPO", "LINHA", "USADO");
+    printf("--------------------------------------------------------------------\n");
+    
+    for (int i = 0; i < MAX_SYMBOLS; i++) {
+        Symbol *current = symbol_table.symbols[i];
+        while (current != NULL) {
+            printf("%-20s %-12s %-10s %-8d %-8d %-8s\n",
+                   current->name,
+                   symbol_type_to_string(current->symbol_type),
+                   data_type_to_string(current->data_type),
+                   current->scope_level,
+                   current->line_declared,
+                   current->is_used ? "SIM" : "NAO");
+            current = current->next;
+        }
+    }
+    printf("====================================\n");
+    printf("Total de símbolos: %d\n\n", symbol_table.count);
+}
+
+DataType string_to_data_type(const char *type_str) {
+    if (strcmp(type_str, "inteiro") == 0) return TYPE_INTEGER;
+    if (strcmp(type_str, "texto") == 0) return TYPE_STRING;
+    if (strcmp(type_str, "decimal") == 0) return TYPE_FLOAT;
+    return TYPE_UNKNOWN;
+}
 
 // Arrays globais para evitar repetição
 const char* const KEYWORDS[] = {"principal", "inteiro", "retorno", "escreva", "leia", "funcao", "senao", "se", "para"};
@@ -493,6 +720,9 @@ int main() {
         printf("\n==============================\n");
         printf("Processando arquivo: %s\n", path);
 
+        // Inicializa a tabela de símbolos para cada arquivo
+        init_symbol_table();
+
         char *content = read_file(path);
         if (content == NULL) {
             printf("Erro ao ler o arquivo: %s\n", path);
@@ -507,12 +737,15 @@ int main() {
             
             printf("\nClassificação dos tokens:\n");
             int i = 0;
+            int current_line = 1;
+            
             while (i < length) {
                 char *cleaned = clear_token(tokens[i]);
                 if (strcmp(tokens[i], "principal") == 0) {
                     PRINCIPAL_FUNC = true;
                 }
                 if (strcmp(tokens[i], "\\n") == 0) {
+                    current_line++;
                     if (i == 0) {
                         printf("tokens[%d] = \"%s\" -> NEWLINE\n", i, tokens[i]);
                     } else {
@@ -543,12 +776,33 @@ int main() {
                     if (i + 1 < length && strncmp(tokens[i + 1], "__", 2) == 0) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
                         printf("tokens[%d] = \"%s\" -> FUNC_NAME\n", i + 1, tokens[i + 1]);
-                        // if (strncmp(tokens[i + 2], "(", 1) == 0) {
-                        //     printf("tokens[%d] = \"%s\" -> LEFT_PAREN\n", i + 2, tokens[i + 2]);
-                        // } else {
-                        //     printf("tokens[%d] = \"%s\" -> ERRO LEXICO - Esperado '(' após função\n", i + 2, tokens[i + 2]);
-                        // }
-                        i += 2; 
+                        
+                        // Adiciona função à tabela de símbolos
+                        add_symbol(tokens[i + 1], SYMBOL_FUNCTION, TYPE_VOID, current_line);
+                        enter_scope(); // Entra no escopo da função
+                        
+                        // Processa parâmetros da função se houver
+                        i += 2;
+                        if (i < length && strcmp(tokens[i], "(") == 0) {
+                            i++; // pula o '('
+                            while (i < length && strcmp(tokens[i], ")") != 0) {
+                                if (is_variable(tokens[i])) {
+                                    // Remove vírgula do nome da variável se presente
+                                    char *param_name = safe_malloc(strlen(tokens[i]) + 1);
+                                    strcpy(param_name, tokens[i]);
+                                    char *comma = strchr(param_name, ',');
+                                    if (comma) *comma = '\0';
+                                    
+                                    add_symbol(param_name, SYMBOL_PARAMETER, TYPE_UNKNOWN, current_line);
+                                    printf("tokens[%d] = \"%s\" -> PARAMETER\n", i, tokens[i]);
+                                    free(param_name);
+                                }
+                                i++;
+                            }
+                            if (i < length && strcmp(tokens[i], ")") == 0) {
+                                i--; // volta um para o loop principal processar o ')'
+                            }
+                        }
                         continue;
                     } else if (i + 1 < length) {
                         printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
@@ -576,9 +830,29 @@ int main() {
                         }
                         printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                         break;
+                    } else {
+                        // Remove vírgula do nome da variável se presente para busca
+                        char *var_name = safe_malloc(strlen(tokens[i]) + 1);
+                        strcpy(var_name, tokens[i]);
+                        char *comma = strchr(var_name, ',');
+                        if (comma) *comma = '\0';
+                        
+                        // Verifica se a variável já foi declarada
+                        Symbol *var = lookup_symbol(var_name);
+                        if (var == NULL) {
+                            printf("tokens[%d] = \"%s\" -> SEMANTIC ERROR (Variável não declarada)\n", i, tokens[i]);
+                        } else {
+                            printf("tokens[%d] = \"%s\" -> VARIABLE (uso)\n", i, tokens[i]);
+                        }
+                        free(var_name);
                     }
                 } else if (strcmp(cleaned, "principal") == 0) {
                     printf("tokens[%d] = \"%s\" -> KEYWORD\n", i, tokens[i]);
+                    
+                    // Adiciona função principal à tabela de símbolos
+                    add_symbol("__principal", SYMBOL_FUNCTION, TYPE_VOID, current_line);
+                    enter_scope(); // Entra no escopo da função principal
+                    
                     i++; 
 
                     // Verifica se o próximo token é '('
@@ -635,6 +909,10 @@ int main() {
                     printf("tokens[%d] = \"%s\" -> LEXICAL ERROR (Operador inválido)\n", i, tokens[i]);
                     printf("ERRO ENCONTRADO: Finalizando a análise.\n");
                     break;
+                } else if (strcmp(tokens[i], ",") == 0) {
+                    printf("tokens[%d] = \"%s\" -> COMMA\n", i, tokens[i]);
+                } else if (strcmp(tokens[i], "=") == 0) {
+                    printf("tokens[%d] = \"%s\" -> ASSIGNMENT\n", i, tokens[i]);
                 } else if (strcmp(tokens[i], ";") == 0) {
                     printf("tokens[%d] = \"%s\" -> SEMICOLON\n", i, tokens[i]);
                 } else if (strcmp(tokens[i], "(") == 0) {
@@ -643,8 +921,10 @@ int main() {
                     printf("tokens[%d] = \"%s\" -> RIGHT_PAREN\n", i, tokens[i]);
                 } else if (strcmp(tokens[i], "{") == 0) {
                     printf("tokens[%d] = \"%s\" -> LEFT_BRACE\n", i, tokens[i]);
+                    enter_scope(); // Entra em novo escopo
                 } else if (strcmp(tokens[i], "}") == 0) {
                     printf("tokens[%d] = \"%s\" -> RIGHT_BRACE\n", i, tokens[i]);
+                    exit_scope(); // Sai do escopo atual
                 } else if (isdigit(tokens[i][0])) {
                     printf("tokens[%d] = \"%s\" -> INTEGER\n", i, tokens[i]);
                 } else if (strcmp(tokens[i], "leia") == 0 || strcmp(tokens[i], "escreva") == 0 || strcmp(tokens[i], "se") == 0 || strcmp(tokens[i], "para") == 0) {
@@ -658,35 +938,57 @@ int main() {
                         printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperado '(' após nome de função\n", i + 1, tokens[i+1]);
                         break;
                     }
-                } else if (strcmp(tokens[i], "inteiro") == 0) {
-                    // Verifica se a próxima string começa com '!'
-                    if (tokens[i+1] != NULL && strncmp(tokens[i+1], "!", 1) == 0) {
-                        printf("tokens[%d] = \"%s\" -> INTEGER_TYPE\n", i, tokens[i]);
-                    } else {
-                        printf("tokens[%d] = \"%s\" -> INTEGER_TYPE\n", i, tokens[i]);
-                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperada uma variável após o tipo\n", i + 1, tokens[i+1]);
-                        break;
+                } else if (strcmp(tokens[i], "inteiro") == 0 || strcmp(tokens[i], "texto") == 0 || strcmp(tokens[i], "decimal") == 0) {
+                    // Declaração de variável
+                    DataType var_type = string_to_data_type(tokens[i]);
+                    const char* type_name = data_type_to_string(var_type);
+                    
+                    printf("tokens[%d] = \"%s\" -> %s_TYPE\n", i, tokens[i], 
+                           var_type == TYPE_INTEGER ? "INTEGER" : 
+                           var_type == TYPE_STRING ? "STRING" : "FLOAT");
+                    
+                    // Processa todas as variáveis declaradas na linha
+                    i++; // vai para o primeiro identificador
+                    while (i < length && strcmp(tokens[i], ";") != 0 && strcmp(tokens[i], "\\n") != 0) {
+                        if (strncmp(tokens[i], "!", 1) == 0) {
+                            // Remove vírgula do nome da variável se presente
+                            char *var_name = safe_malloc(strlen(tokens[i]) + 1);
+                            strcpy(var_name, tokens[i]);
+                            char *comma = strchr(var_name, ',');
+                            if (comma) *comma = '\0';
+                            
+                            // Adiciona variável à tabela de símbolos
+                            if (add_symbol(var_name, SYMBOL_VARIABLE, var_type, current_line)) {
+                                printf("tokens[%d] = \"%s\" -> VARIABLE (declaração)\n", i, tokens[i]);
+                            }
+                            free(var_name);
+                        } else if (strcmp(tokens[i], "=") == 0) {
+                            printf("tokens[%d] = \"%s\" -> ASSIGNMENT\n", i, tokens[i]);
+                        } else if (strcmp(tokens[i], ",") == 0) {
+                            printf("tokens[%d] = \"%s\" -> COMMA\n", i, tokens[i]);
+                        } else if (isdigit(tokens[i][0])) {
+                            printf("tokens[%d] = \"%s\" -> INTEGER\n", i, tokens[i]);
+                        } else {
+                            printf("tokens[%d] = \"%s\" -> IDENTIFIER/OTHER\n", i, tokens[i]);
+                        }
+                        i++;
                     }
-                } else if (strcmp(tokens[i], "texto") == 0) {
-                    // Verifica se a próxima string começa com '!'
-                    if (tokens[i+1] != NULL && strncmp(tokens[i+1], "!", 1) == 0) {
-                        printf("tokens[%d] = \"%s\" -> STRING_TYPE\n", i, tokens[i]);
-                    } else {
-                        printf("tokens[%d] = \"%s\" -> STRING_TYPE\n", i, tokens[i]);
-                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperada uma variável após o tipo\n", i + 1, tokens[i+1]);
-                        break;
-                    }
-                } else if (strcmp(tokens[i], "decimal") == 0) {
-                    // Verifica se a próxima string começa com '!'
-                    if (tokens[i+1] != NULL && strncmp(tokens[i+1], "!", 1) == 0) {
-                        printf("tokens[%d] = \"%s\" -> FLOAT_TYPE\n", i, tokens[i]);
-                    } else {
-                        printf("tokens[%d] = \"%s\" -> FLOAT_TYPE\n", i, tokens[i]);
-                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperada uma variável após o tipo\n", i + 1, tokens[i+1]);
-                        break;
-                    }
+                    i--; // volta um para o loop principal processar o próximo token
                 } else if (is_variable(tokens[i])) {
-                    printf("tokens[%d] = \"%s\" -> VARIABLE\n", i, tokens[i]);
+                    // Remove vírgula do nome da variável se presente para busca
+                    char *var_name = safe_malloc(strlen(tokens[i]) + 1);
+                    strcpy(var_name, tokens[i]);
+                    char *comma = strchr(var_name, ',');
+                    if (comma) *comma = '\0';
+                    
+                    // Verifica se a variável já foi declarada
+                    Symbol *var = lookup_symbol(var_name);
+                    if (var == NULL) {
+                        printf("tokens[%d] = \"%s\" -> SEMANTIC ERROR (Variável não declarada)\n", i, tokens[i]);
+                    } else {
+                        printf("tokens[%d] = \"%s\" -> VARIABLE (uso)\n", i, tokens[i]);
+                    }
+                    free(var_name);
                 } else if (has_lexical_error(tokens[i])) {
                     char *suggestion = suggest_keyword(tokens[i]);
                     if (suggestion != NULL) {
@@ -711,6 +1013,12 @@ int main() {
             } else {
                 printf("Verificação de 'retorno' concluída com sucesso.\n");
             }
+
+            // Infere tipos de parâmetros antes de imprimir a tabela
+            infer_parameter_types();
+
+            // Imprime a tabela de símbolos
+            print_symbol_table();
 
             for (int j = 0; j < length; j++) {
                 free(tokens[j]);
