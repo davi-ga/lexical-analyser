@@ -46,6 +46,17 @@ typedef struct SymbolTable {
     int current_scope;
 } SymbolTable;
 
+// Estrutura para chamadas de função pendentes
+typedef struct PendingFunctionCall {
+    char *function_name;
+    int param_count;
+    int line_number;
+    struct PendingFunctionCall *next;
+} PendingFunctionCall;
+
+// Lista de chamadas pendentes
+PendingFunctionCall *pending_calls = NULL;
+
 // Variável global da tabela de símbolos
 SymbolTable symbol_table = {0};
 
@@ -53,6 +64,59 @@ SymbolTable symbol_table = {0};
 void* safe_malloc(size_t size);
 Symbol* lookup_symbol_current_scope(const char *name);
 int is_variable(const char *token);
+bool validate_leia_command(char **tokens, int start_idx, int *end_idx, int current_line);
+bool validate_escreva_command(char **tokens, int start_idx, int *end_idx, int current_line);
+bool validate_se_command(char **tokens, int start_idx, int *end_idx, int current_line);
+bool validate_para_command(char **tokens, int start_idx, int *end_idx, int current_line);
+
+// Função para validar duplo balanceamento em qualquer contexto
+bool validate_double_balancing(char **tokens, int start_idx, int end_idx, bool check_quotes) {
+    int paren_count = 0;
+    int brace_count = 0;
+    int bracket_count = 0;
+    bool in_string = false;
+    int quote_count = 0;
+    
+    for (int i = start_idx; i <= end_idx; i++) {
+        if (tokens[i] == NULL) continue;
+        
+        // Balanceamento de aspas duplas (se solicitado)
+        if (check_quotes && strcmp(tokens[i], "\"") == 0) {
+            in_string = !in_string;
+            quote_count++;
+            continue;
+        }
+        
+        // Se estiver dentro de string, ignora outros balanceamentos
+        if (in_string) continue;
+        
+        // Balanceamento de parênteses
+        if (strcmp(tokens[i], "(") == 0) {
+            paren_count++;
+        } else if (strcmp(tokens[i], ")") == 0) {
+            paren_count--;
+            if (paren_count < 0) return false; // Fechamento sem abertura
+        }
+        // Balanceamento de chaves
+        else if (strcmp(tokens[i], "{") == 0) {
+            brace_count++;
+        } else if (strcmp(tokens[i], "}") == 0) {
+            brace_count--;
+            if (brace_count < 0) return false; // Fechamento sem abertura
+        }
+        // Balanceamento de colchetes
+        else if (strcmp(tokens[i], "[") == 0) {
+            bracket_count++;
+        } else if (strcmp(tokens[i], "]") == 0) {
+            bracket_count--;
+            if (bracket_count < 0) return false; // Fechamento sem abertura
+        }
+    }
+    
+    // Verifica se todos estão balanceados
+    if (check_quotes && quote_count % 2 != 0) return false; // Aspas não balanceadas
+    return (paren_count == 0 && brace_count == 0 && bracket_count == 0);
+}
 
 // Funções da tabela de símbolos
 unsigned int hash_function(const char *name) {
@@ -405,6 +469,528 @@ bool validate_leia_command(char **tokens, int start_idx, int *end_idx, int curre
     }
     
     *end_idx = close_paren_pos + 1; // Atualiza a posição final
+    return true;
+}
+
+bool validate_escreva_command(char **tokens, int start_idx, int *end_idx, int current_line) {
+    // 5.9. Haverá sempre um duplo balanceamento utilizando os parênteses
+    if (start_idx >= *end_idx || strcmp(tokens[start_idx], "(") != 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'escreva' deve ser seguido por '('\n", current_line);
+        return false;
+    }
+    
+    int i = start_idx + 1;
+    int paren_count = 1;
+    int close_paren_pos = -1;
+    bool expecting_content = true;
+    bool expecting_comma = false;
+    int content_count = 0;
+    bool in_string = false;
+    
+    // Procura o fechamento dos parênteses e valida o conteúdo
+    while (i < *end_idx && paren_count > 0) {
+        if (tokens[i] == NULL) break; // Proteção contra tokens nulos
+        
+        if (strcmp(tokens[i], "(") == 0 && !in_string) {
+            paren_count++;
+        } else if (strcmp(tokens[i], ")") == 0 && !in_string) {
+            paren_count--;
+            if (paren_count == 0) {
+                close_paren_pos = i;
+                break;
+            }
+        } else if (paren_count == 1) { // Apenas no nível principal dos parênteses
+            if (strcmp(tokens[i], "\"") == 0) {
+                // 5.9. Balanceamento de aspas duplas para texto
+                if (!in_string) {
+                    in_string = true;
+                    if (expecting_content) {
+                        expecting_content = false;
+                        expecting_comma = true;
+                        content_count++;
+                    }
+                } else {
+                    in_string = false;
+                }
+            } else if (in_string) {
+                // 5.4. Textos dentro de aspas duplas - aceita qualquer conteúdo
+                // Não faz nada, apenas continua
+            } else if (expecting_content) {
+                if (is_variable(tokens[i])) {
+                    // 5.3, 5.6. Variáveis devem ser declaradas anteriormente
+                    Symbol *var = lookup_symbol(tokens[i]);
+                    if (var == NULL) {
+                        printf("SEMANTIC ERROR (linha %d): Variável '%s' não foi declarada\n", current_line, tokens[i]);
+                        return false;
+                    }
+                    
+                    // 5.8. Não podem ser feitas declarações dentro da estrutura de escrita
+                    if (var->symbol_type != SYMBOL_VARIABLE && var->symbol_type != SYMBOL_PARAMETER) {
+                        printf("SEMANTIC ERROR (linha %d): '%s' não é uma variável válida para escrita\n", current_line, tokens[i]);
+                        return false;
+                    }
+                    
+                    var->is_used = true;
+                    content_count++;
+                    expecting_content = false;
+                    expecting_comma = true;
+                } else if (strcmp(tokens[i], "\n") == 0) {
+                    // Ignora quebras de linha
+                    i++;
+                    continue;
+                } else {
+                    printf("SYNTAX ERROR (linha %d): Esperado texto (entre aspas) ou variável no comando 'escreva', encontrado '%s'\n", current_line, tokens[i]);
+                    return false;
+                }
+            } else if (expecting_comma) {
+                if (strcmp(tokens[i], ",") == 0) {
+                    // 5.2, 5.6. Vírgula para separar conteúdo
+                    expecting_content = true;
+                    expecting_comma = false;
+                } else if (strcmp(tokens[i], "\n") == 0) {
+                    // Ignora quebras de linha
+                    i++;
+                    continue;
+                } else {
+                    printf("SYNTAX ERROR (linha %d): Esperada vírgula entre elementos no comando 'escreva', encontrado '%s'\n", current_line, tokens[i]);
+                    return false;
+                }
+            }
+        }
+        i++;
+    }
+    
+    if (close_paren_pos == -1) {
+        printf("SYNTAX ERROR (linha %d): Comando 'escreva' sem fechamento de parênteses\n", current_line);
+        return false;
+    }
+    
+    if (in_string) {
+        printf("SYNTAX ERROR (linha %d): String não fechada no comando 'escreva'\n", current_line);
+        return false;
+    }
+    
+    if (expecting_content && content_count > 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'escreva' termina com vírgula sem conteúdo\n", current_line);
+        return false;
+    }
+    
+    if (content_count == 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'escreva' deve ter pelo menos um elemento\n", current_line);
+        return false;
+    }
+    
+    // Verifica se há ponto e vírgula após o fechamento dos parênteses
+    if (close_paren_pos + 1 < *end_idx && tokens[close_paren_pos + 1] != NULL && strcmp(tokens[close_paren_pos + 1], ";") != 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'escreva' deve ser finalizado com ';'\n", current_line);
+        return false;
+    }
+    
+    *end_idx = (close_paren_pos + 1 < *end_idx && tokens[close_paren_pos + 1] != NULL && strcmp(tokens[close_paren_pos + 1], ";") == 0) 
+               ? close_paren_pos + 1 : close_paren_pos;
+    return true;
+}
+
+bool validate_se_command(char **tokens, int start_idx, int *end_idx, int current_line) {
+    // 6.1. Deve conter obrigatoriamente um teste e uma condição de verdadeiro
+    if (start_idx >= *end_idx || strcmp(tokens[start_idx], "(") != 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'se' deve ser seguido por '(' para o teste\n", current_line);
+        return false;
+    }
+    
+    int i = start_idx + 1;
+    int paren_count = 1;
+    int close_test_paren = -1;
+    
+    // Procura o fechamento do teste (condição)
+    while (i < *end_idx && paren_count > 0) {
+        if (tokens[i] == NULL) break;
+        
+        if (strcmp(tokens[i], "(") == 0) {
+            paren_count++;
+        } else if (strcmp(tokens[i], ")") == 0) {
+            paren_count--;
+            if (paren_count == 0) {
+                close_test_paren = i;
+                break;
+            }
+        }
+        i++;
+    }
+    
+    if (close_test_paren == -1) {
+        printf("SYNTAX ERROR (linha %d): Teste do comando 'se' sem fechamento de parênteses\n", current_line);
+        return false;
+    }
+    
+    // Verifica se há conteúdo no teste
+    bool has_test_content = false;
+    for (int j = start_idx + 1; j < close_test_paren; j++) {
+        if (tokens[j] != NULL && strcmp(tokens[j], "\n") != 0) {
+            has_test_content = true;
+            break;
+        }
+    }
+    
+    if (!has_test_content) {
+        printf("SYNTAX ERROR (linha %d): Teste do comando 'se' não pode estar vazio\n", current_line);
+        return false;
+    }
+    
+    // 6.3. A linha do teste (se) não conterá finalização de linha (ponto e vírgula)
+    if (close_test_paren + 1 < *end_idx && tokens[close_test_paren + 1] != NULL && strcmp(tokens[close_test_paren + 1], ";") == 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'se' não deve ter ';' após o teste\n", current_line);
+        return false;
+    }
+    
+    i = close_test_paren + 1;
+    
+    // Pula quebras de linha
+    while (i < *end_idx && tokens[i] != NULL && strcmp(tokens[i], "\n") == 0) {
+        i++;
+    }
+    
+    if (i >= *end_idx || tokens[i] == NULL) {
+        printf("SYNTAX ERROR (linha %d): Comando 'se' deve ter uma condição verdadeira\n", current_line);
+        return false;
+    }
+    
+    // 6.1, 6.2. Processa bloco verdadeiro (obrigatório)
+    bool true_block_multiline = false;
+    int true_block_start = i;
+    int true_block_end = i;
+    
+    if (strcmp(tokens[i], "{") == 0) {
+        // 6.2. Bloco com múltiplas linhas
+        true_block_multiline = true;
+        int brace_count = 1;
+        i++;
+        
+        while (i < *end_idx && brace_count > 0) {
+            if (tokens[i] == NULL) break;
+            
+            if (strcmp(tokens[i], "{") == 0) {
+                brace_count++;
+            } else if (strcmp(tokens[i], "}") == 0) {
+                brace_count--;
+                if (brace_count == 0) {
+                    true_block_end = i;
+                    break;
+                }
+            }
+            i++;
+        }
+        
+        if (brace_count > 0) {
+            printf("SYNTAX ERROR (linha %d): Bloco verdadeiro do 'se' sem fechamento de '{'\n", current_line);
+            return false;
+        }
+    } else {
+        // 6.2. Linha única - deve terminar com ponto e vírgula
+        while (i < *end_idx && tokens[i] != NULL && strcmp(tokens[i], ";") != 0 && strcmp(tokens[i], "\n") != 0) {
+            // 6.2. Não pode conter declaração de variáveis
+            if (strcmp(tokens[i], "inteiro") == 0 || strcmp(tokens[i], "texto") == 0 || 
+                strcmp(tokens[i], "decimal") == 0 || strcmp(tokens[i], "flutuante") == 0) {
+                printf("SEMANTIC ERROR (linha %d): Não é permitido declarar variáveis dentro do bloco 'se'\n", current_line);
+                return false;
+            }
+            i++;
+        }
+        
+        // 6.3. Deve terminar com ponto e vírgula
+        if (i >= *end_idx || tokens[i] == NULL || strcmp(tokens[i], ";") != 0) {
+            printf("SYNTAX ERROR (linha %d): Bloco verdadeiro do 'se' deve terminar com ';'\n", current_line);
+            return false;
+        }
+        
+        true_block_end = i;
+    }
+    
+    i = true_block_end + 1;
+    
+    // Pula quebras de linha
+    while (i < *end_idx && tokens[i] != NULL && strcmp(tokens[i], "\n") == 0) {
+        i++;
+    }
+    
+    // 6.1. Verifica se há bloco 'senao' (opcional)
+    if (i < *end_idx && tokens[i] != NULL && strcmp(tokens[i], "senao") == 0) {
+        i++; // Pula 'senao'
+        
+        // Pula quebras de linha
+        while (i < *end_idx && tokens[i] != NULL && strcmp(tokens[i], "\n") == 0) {
+            i++;
+        }
+        
+        if (i >= *end_idx || tokens[i] == NULL) {
+            printf("SYNTAX ERROR (linha %d): 'senao' deve ter uma condição falsa\n", current_line);
+            return false;
+        }
+        
+        // 6.2. Processa bloco falso
+        if (strcmp(tokens[i], "{") == 0) {
+            // Bloco com múltiplas linhas
+            int brace_count = 1;
+            i++;
+            
+            while (i < *end_idx && brace_count > 0) {
+                if (tokens[i] == NULL) break;
+                
+                if (strcmp(tokens[i], "{") == 0) {
+                    brace_count++;
+                } else if (strcmp(tokens[i], "}") == 0) {
+                    brace_count--;
+                    if (brace_count == 0) {
+                        break;
+                    }
+                }
+                i++;
+            }
+            
+            if (brace_count > 0) {
+                printf("SYNTAX ERROR (linha %d): Bloco falso do 'senao' sem fechamento de '{'\n", current_line);
+                return false;
+            }
+        } else {
+            // Linha única - deve terminar com ponto e vírgula
+            while (i < *end_idx && tokens[i] != NULL && strcmp(tokens[i], ";") != 0 && strcmp(tokens[i], "\n") != 0) {
+                // 6.2. Não pode conter declaração de variáveis
+                if (strcmp(tokens[i], "inteiro") == 0 || strcmp(tokens[i], "texto") == 0 || 
+                    strcmp(tokens[i], "decimal") == 0 || strcmp(tokens[i], "flutuante") == 0) {
+                    printf("SEMANTIC ERROR (linha %d): Não é permitido declarar variáveis dentro do bloco 'senao'\n", current_line);
+                    return false;
+                }
+                i++;
+            }
+            
+            // 6.3. Deve terminar com ponto e vírgula
+            if (i >= *end_idx || tokens[i] == NULL || strcmp(tokens[i], ";") != 0) {
+                printf("SYNTAX ERROR (linha %d): Bloco falso do 'senao' deve terminar com ';'\n", current_line);
+                return false;
+            }
+        }
+    }
+    
+    *end_idx = i;
+    return true;
+}
+
+bool validate_para_command(char **tokens, int start_idx, int *end_idx, int current_line) {
+    // 7.1. O laço de repetição – para possui a seguinte estrutura for (x1; x2; x3)
+    if (start_idx >= *end_idx || strcmp(tokens[start_idx], "(") != 0) {
+        printf("SYNTAX ERROR (linha %d): Comando 'para' deve ser seguido por '('\n", current_line);
+        return false;
+    }
+    
+    int i = start_idx + 1;
+    int paren_count = 1;
+    int close_paren_pos = -1;
+    int semicolon_count = 0;
+    int x1_start = i, x1_end = -1;
+    int x2_start = -1, x2_end = -1;
+    int x3_start = -1, x3_end = -1;
+    
+    // Procura os três segmentos separados por ponto e vírgula
+    while (i < *end_idx && paren_count > 0) {
+        if (tokens[i] == NULL) break;
+        
+        if (strcmp(tokens[i], "(") == 0) {
+            paren_count++;
+        } else if (strcmp(tokens[i], ")") == 0) {
+            paren_count--;
+            if (paren_count == 0) {
+                close_paren_pos = i;
+                // Define o final do terceiro segmento
+                if (semicolon_count == 2) {
+                    x3_end = i - 1;
+                } else if (semicolon_count == 1) {
+                    x2_end = i - 1;
+                } else {
+                    x1_end = i - 1;
+                }
+                break;
+            }
+        } else if (paren_count == 1 && strcmp(tokens[i], ";") == 0) {
+            semicolon_count++;
+            if (semicolon_count == 1) {
+                x1_end = i - 1;
+                x2_start = i + 1;
+            } else if (semicolon_count == 2) {
+                x2_end = i - 1;
+                x3_start = i + 1;
+            }
+        }
+        i++;
+    }
+    
+    if (close_paren_pos == -1) {
+        printf("SYNTAX ERROR (linha %d): Comando 'para' sem fechamento de parênteses\n", current_line);
+        return false;
+    }
+    
+    if (semicolon_count != 2) {
+        printf("SYNTAX ERROR (linha %d): Comando 'para' deve ter exatamente 2 pontos e vírgulas (x1; x2; x3)\n", current_line);
+        return false;
+    }
+    
+    // 7.1.1. Validação de x1 (inicialização)
+    if (x1_start <= x1_end) {
+        bool has_assignment = false;
+        for (int j = x1_start; j <= x1_end; j++) {
+            if (tokens[j] == NULL || strcmp(tokens[j], "\n") == 0) continue;
+            
+            // 7.1.1.4. As variáveis já devem ter sido declaradas anteriormente
+            if (is_variable(tokens[j])) {
+                Symbol *var = lookup_symbol(tokens[j]);
+                if (var == NULL) {
+                    printf("SEMANTIC ERROR (linha %d): Variável '%s' não foi declarada\n", current_line, tokens[j]);
+                    return false;
+                }
+                if (var->symbol_type != SYMBOL_VARIABLE && var->symbol_type != SYMBOL_PARAMETER) {
+                    printf("SEMANTIC ERROR (linha %d): '%s' não é uma variável válida\n", current_line, tokens[j]);
+                    return false;
+                }
+                var->is_used = true;
+            }
+            
+            // 7.1.1.2. Utilizar comando de atribuição
+            if (strcmp(tokens[j], "=") == 0) {
+                has_assignment = true;
+            }
+            
+            // 7.1.1.5. Múltiplas variáveis separadas por vírgula
+            if (strcmp(tokens[j], ",") == 0) {
+                // Aceita vírgulas para múltiplas inicializações
+            }
+        }
+        
+        // x1 pode estar vazio (7.1.1.1. ou ainda não a iniciar)
+        if (x1_start <= x1_end && has_assignment == false) {
+            // Verifica se há conteúdo que não seja espaço/newline
+            bool has_content = false;
+            for (int j = x1_start; j <= x1_end; j++) {
+                if (tokens[j] != NULL && strcmp(tokens[j], "\n") != 0) {
+                    has_content = true;
+                    break;
+                }
+            }
+            if (has_content) {
+                printf("SYNTAX ERROR (linha %d): Inicialização x1 deve usar comando de atribuição '='\n", current_line);
+                return false;
+            }
+        }
+    }
+    
+    // 7.1.2. Validação de x2 (teste/condição)
+    if (x2_start == -1 || x2_start > x2_end) {
+        printf("SYNTAX ERROR (linha %d): Comando 'para' deve ter uma condição de teste x2\n", current_line);
+        return false;
+    }
+    
+    bool has_test_content = false;
+    for (int j = x2_start; j <= x2_end; j++) {
+        if (tokens[j] == NULL || strcmp(tokens[j], "\n") == 0) continue;
+        
+        has_test_content = true;
+        
+        // Verifica se usa variáveis declaradas
+        if (is_variable(tokens[j])) {
+            Symbol *var = lookup_symbol(tokens[j]);
+            if (var == NULL) {
+                printf("SEMANTIC ERROR (linha %d): Variável '%s' usada na condição não foi declarada\n", current_line, tokens[j]);
+                return false;
+            }
+            var->is_used = true;
+        }
+    }
+    
+    if (!has_test_content) {
+        printf("SYNTAX ERROR (linha %d): Condição de teste x2 não pode estar vazia\n", current_line);
+        return false;
+    }
+    
+    // 7.1.3. Validação de x3 (operação matemática)
+    if (x3_start != -1 && x3_start <= x3_end) {
+        for (int j = x3_start; j <= x3_end; j++) {
+            if (tokens[j] == NULL || strcmp(tokens[j], "\n") == 0) continue;
+            
+            // 7.1.3.1. Variáveis devem estar declaradas
+            if (is_variable(tokens[j])) {
+                Symbol *var = lookup_symbol(tokens[j]);
+                if (var == NULL) {
+                    printf("SEMANTIC ERROR (linha %d): Variável '%s' usada na operação não foi declarada\n", current_line, tokens[j]);
+                    return false;
+                }
+                var->is_used = true;
+            }
+            
+            // 7.1.3.2. Aceita operações matemáticas (+, -, *, /, %, ++, --)
+            if (strcmp(tokens[j], "+") == 0 || strcmp(tokens[j], "-") == 0 || 
+                strcmp(tokens[j], "*") == 0 || strcmp(tokens[j], "/") == 0 || 
+                strcmp(tokens[j], "%") == 0 || strcmp(tokens[j], "++") == 0 || 
+                strcmp(tokens[j], "--") == 0 || strcmp(tokens[j], "=") == 0) {
+                // Operações matemáticas válidas
+            }
+        }
+    }
+    // x3 pode estar vazio
+    
+    // Processa o bloco do laço
+    i = close_paren_pos + 1;
+    
+    // Pula quebras de linha
+    while (i < *end_idx && tokens[i] != NULL && strcmp(tokens[i], "\n") == 0) {
+        i++;
+    }
+    
+    if (i >= *end_idx || tokens[i] == NULL) {
+        printf("SYNTAX ERROR (linha %d): Comando 'para' deve ter um bloco de execução\n", current_line);
+        return false;
+    }
+    
+    // Processa bloco do laço
+    if (strcmp(tokens[i], "{") == 0) {
+        // Bloco com múltiplas linhas
+        int brace_count = 1;
+        i++;
+        
+        while (i < *end_idx && brace_count > 0) {
+            if (tokens[i] == NULL) break;
+            
+            if (strcmp(tokens[i], "{") == 0) {
+                brace_count++;
+            } else if (strcmp(tokens[i], "}") == 0) {
+                brace_count--;
+                if (brace_count == 0) {
+                    break;
+                }
+            }
+            i++;
+        }
+        
+        if (brace_count > 0) {
+            printf("SYNTAX ERROR (linha %d): Bloco do 'para' sem fechamento de '{'\n", current_line);
+            return false;
+        }
+    } else {
+        // Linha única - deve terminar com ponto e vírgula
+        while (i < *end_idx && tokens[i] != NULL && strcmp(tokens[i], ";") != 0 && strcmp(tokens[i], "\n") != 0) {
+            // Não pode conter declaração de variáveis no bloco
+            if (strcmp(tokens[i], "inteiro") == 0 || strcmp(tokens[i], "texto") == 0 || 
+                strcmp(tokens[i], "decimal") == 0 || strcmp(tokens[i], "flutuante") == 0) {
+                printf("SEMANTIC ERROR (linha %d): Não é permitido declarar variáveis dentro do bloco 'para'\n", current_line);
+                return false;
+            }
+            i++;
+        }
+        
+        if (i >= *end_idx || tokens[i] == NULL || strcmp(tokens[i], ";") != 0) {
+            printf("SYNTAX ERROR (linha %d): Bloco do 'para' deve terminar com ';'\n", current_line);
+            return false;
+        }
+    }
+    
+    *end_idx = i;
     return true;
 }
 
@@ -1190,15 +1776,119 @@ int main() {
                         printf("SYNTAX ERROR: Comando 'leia' incompleto\n");
                         break;
                     }
-                } else if (strcmp(tokens[i], "escreva") == 0 || strcmp(tokens[i], "se") == 0 || strcmp(tokens[i], "para") == 0) {
-                    // Verifica se a próxima string começa com '('
-                    if (tokens[i+1] != NULL && strncmp(tokens[i+1], "(", 1) == 0) {
-                        printf("tokens[%d] = \"%s\" -> KEYWORD_FUNC\n", i, tokens[i]);
-                        printf("tokens[%d] = \"%s\" -> KEYWORD_FUNC_LEFT_PAREN\n", i, tokens[i+1]);
-                        i++;
+                } else if (strcmp(tokens[i], "escreva") == 0) {
+                    // Processamento específico para o comando escreva
+                    printf("tokens[%d] = \"%s\" -> ESCREVA_COMMAND\n", i, tokens[i]);
+                    
+                    if (i + 1 < length) {
+                        int end_pos = length - 1;
+                        if (validate_escreva_command(tokens, i + 1, &end_pos, current_line)) {
+                            // Processa tokens validados do comando escreva
+                            for (int j = i + 1; j <= end_pos; j++) {
+                                if (strcmp(tokens[j], "(") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> LEFT_PAREN\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ")") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> RIGHT_PAREN\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ",") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> COMMA\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ";") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> SEMICOLON\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "\"") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> QUOTE\n", j, tokens[j]);
+                                } else if (is_variable(tokens[j])) {
+                                    printf("tokens[%d] = \"%s\" -> VARIABLE (escrita)\n", j, tokens[j]);
+                                } else {
+                                    printf("tokens[%d] = \"%s\" -> STRING_TEXT\n", j, tokens[j]);
+                                }
+                            }
+                            i = end_pos; // Pula para o final do comando processado
+                        } else {
+                            printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                            break;
+                        }
                     } else {
-                        printf("tokens[%d] = \"%s\" -> FUNC\n", i, tokens[i]);
-                        printf("tokens[%d] = \"%s\" -> LEXICAL ERROR - Era esperado '(' após nome de função\n", i + 1, tokens[i+1]);
+                        printf("SYNTAX ERROR: Comando 'escreva' incompleto\n");
+                        break;
+                    }
+                } else if (strcmp(tokens[i], "se") == 0) {
+                    // Processamento específico para o comando se
+                    printf("tokens[%d] = \"%s\" -> SE_COMMAND\n", i, tokens[i]);
+                    
+                    if (i + 1 < length) {
+                        int end_pos = length - 1;
+                        if (validate_se_command(tokens, i + 1, &end_pos, current_line)) {
+                            // Processa tokens validados do comando se
+                            for (int j = i + 1; j <= end_pos; j++) {
+                                if (strcmp(tokens[j], "(") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> LEFT_PAREN\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ")") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> RIGHT_PAREN\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "{") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> LEFT_BRACE\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "}") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> RIGHT_BRACE\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ";") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> SEMICOLON\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "senao") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> SENAO_KEYWORD\n", j, tokens[j]);
+                                } else if (is_variable(tokens[j])) {
+                                    printf("tokens[%d] = \"%s\" -> VARIABLE (condicional)\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "\n") != 0) {
+                                    printf("tokens[%d] = \"%s\" -> CONDITIONAL_CONTENT\n", j, tokens[j]);
+                                }
+                            }
+                            i = end_pos; // Pula para o final do comando processado
+                        } else {
+                            printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                            break;
+                        }
+                    } else {
+                        printf("SYNTAX ERROR: Comando 'se' incompleto\n");
+                        break;
+                    }
+                } else if (strcmp(tokens[i], "para") == 0) {
+                    // Processamento específico para o comando para
+                    printf("tokens[%d] = \"%s\" -> PARA_COMMAND\n", i, tokens[i]);
+                    
+                    if (i + 1 < length) {
+                        int end_pos = length - 1;
+                        if (validate_para_command(tokens, i + 1, &end_pos, current_line)) {
+                            // Processa tokens validados do comando para
+                            for (int j = i + 1; j <= end_pos; j++) {
+                                if (strcmp(tokens[j], "(") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> LEFT_PAREN\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ")") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> RIGHT_PAREN\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "{") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> LEFT_BRACE\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "}") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> RIGHT_BRACE\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ";") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> SEMICOLON\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], ",") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> COMMA\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "=") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> ASSIGNMENT\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "+") == 0 || strcmp(tokens[j], "-") == 0 || 
+                                         strcmp(tokens[j], "*") == 0 || strcmp(tokens[j], "/") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> MATH_OPERATOR\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "++") == 0 || strcmp(tokens[j], "--") == 0) {
+                                    printf("tokens[%d] = \"%s\" -> INCREMENT_DECREMENT\n", j, tokens[j]);
+                                } else if (is_variable(tokens[j])) {
+                                    printf("tokens[%d] = \"%s\" -> VARIABLE (loop)\n", j, tokens[j]);
+                                } else if (isdigit(tokens[j][0])) {
+                                    printf("tokens[%d] = \"%s\" -> NUMBER\n", j, tokens[j]);
+                                } else if (strcmp(tokens[j], "\n") != 0) {
+                                    printf("tokens[%d] = \"%s\" -> LOOP_CONTENT\n", j, tokens[j]);
+                                }
+                            }
+                            i = end_pos; // Pula para o final do comando processado
+                        } else {
+                            printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                            break;
+                        }
+                    } else {
+                        printf("SYNTAX ERROR: Comando 'para' incompleto\n");
                         break;
                     }
                 } else if (strcmp(tokens[i], "inteiro") == 0 || strcmp(tokens[i], "texto") == 0 || strcmp(tokens[i], "decimal") == 0) {
@@ -1275,28 +1965,59 @@ int main() {
                 } else if (strncmp(tokens[i], "__", 2) == 0) {
                     // Possível chamada de função
                     if (i + 1 < length && strcmp(tokens[i + 1], "(") == 0) {
-                        // Conta parâmetros na chamada
-                        int param_count = 0;
-                        int j = i + 2; // Pula o '('
+                        // Encontra o fechamento dos parênteses com balanceamento adequado
+                        int param_start = i + 2;
+                        int param_end = -1;
                         int paren_level = 1;
+                        int j = param_start;
                         
                         while (j < length && paren_level > 0) {
                             if (strcmp(tokens[j], "(") == 0) {
                                 paren_level++;
                             } else if (strcmp(tokens[j], ")") == 0) {
                                 paren_level--;
-                            } else if (strcmp(tokens[j], ",") == 0 && paren_level == 1) {
-                                param_count++;
-                            } else if (paren_level == 1 && strcmp(tokens[j], ",") != 0 && 
-                                     strcmp(tokens[j], "(") != 0 && strcmp(tokens[j], ")") != 0) {
-                                // Se há pelo menos um parâmetro não-vazio
-                                if (param_count == 0) param_count = 1;
+                                if (paren_level == 0) {
+                                    param_end = j - 1;
+                                    break;
+                                }
                             }
                             j++;
                         }
                         
-                        // Se havia vírgulas, incrementa para contar o último parâmetro
-                        if (param_count > 0 && j > i + 3) param_count++;
+                        if (param_end == -1) {
+                            printf("SYNTAX ERROR (linha %d): Chamada de função '%s' sem fechamento de parênteses\n", current_line, tokens[i]);
+                            printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                            break;
+                        }
+                        
+                        // Valida duplo balanceamento nos parâmetros
+                        if (param_start <= param_end) {
+                            if (!validate_double_balancing(tokens, param_start, param_end, true)) {
+                                printf("SYNTAX ERROR (linha %d): Balanceamento incorreto nos parâmetros da função '%s'\n", current_line, tokens[i]);
+                                printf("ERRO ENCONTRADO: Finalizando a análise.\n");
+                                break;
+                            }
+                        }
+                        
+                        // Conta parâmetros na chamada
+                        int param_count = 0;
+                        bool has_content = false;
+                        
+                        for (int k = param_start; k <= param_end; k++) {
+                            if (tokens[k] == NULL || strcmp(tokens[k], "\n") == 0) continue;
+                            
+                            if (strcmp(tokens[k], ",") == 0) {
+                                if (has_content) {
+                                    param_count++;
+                                    has_content = false;
+                                }
+                            } else {
+                                has_content = true;
+                            }
+                        }
+                        
+                        // Se há conteúdo após a última vírgula (ou se não há vírgulas mas há conteúdo)
+                        if (has_content) param_count++;
                         
                         if (validate_function_call(tokens[i], param_count, current_line)) {
                             printf("tokens[%d] = \"%s\" -> FUNCTION_CALL (%d parâmetros)\n", i, tokens[i], param_count);
