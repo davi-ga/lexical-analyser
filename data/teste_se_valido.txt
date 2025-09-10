@@ -1,0 +1,24 @@
+funcao __principal() {
+    inteiro !x = 10;
+    inteiro !y = 5;
+    
+    se (!x > !y) 
+        escreva("x eh maior");
+    
+    se (!x < !y) {
+        escreva("x eh menor");
+        escreva("Bloco com multiplas linhas");
+    }
+    
+    se (!x == !y)
+        escreva("Sao iguais");
+    senao
+        escreva("Sao diferentes");
+    
+    se (!x != !y) {
+        escreva("Diferentes no bloco");
+    } senao {
+        escreva("Iguais no bloco");
+        escreva("Segunda linha do senao");
+    }
+}

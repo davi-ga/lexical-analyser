@@ -1,0 +1,16 @@
+funcao __principal() {
+    inteiro !x = 5;
+    
+    __funcaoInexistente(!x);
+    
+    !x = __outraFuncaoInexistente(!x, 10);
+    
+    __funcaoComParametrosErrados();
+    
+    __funcaoValida(!x);
+}
+
+funcao __funcaoValida(inteiro !param) {
+    escreva("Parametro: ", !param);
+    retorno;
+}

@@ -1,0 +1,43 @@
+// Teste completo do comando escreva - todos os casos válidos e inválidos
+programa teste_escreva {
+    inteiro x, y;
+    flutuante z;
+    cadeia nome;
+    
+    x = 10;
+    y = 20;
+    z = 3.14;
+    nome = "Usuario";
+    
+    // 5.1, 5.3, 5.6 - Escrever múltiplas variáveis de tipos diferentes
+    escreva(x, y, z, nome);
+    
+    // 5.2, 5.4, 5.5 - Mesclar texto e variável com vírgulas
+    escreva("O valor de x eh: ", x, " e y eh: ", y);
+    
+    // 5.7 - Agrupamento de conteúdo válido
+    escreva("Nome: ", nome, ", Idade: ", x, " anos");
+    
+    // 5.9 - Balanceamento de parênteses e aspas
+    escreva("Texto simples");
+    
+    // Casos de erro:
+    
+    // 5.3, 5.6 - Variável não declarada
+    escreva(w);
+    
+    // 5.8 - Declaração dentro do comando (inválido)
+    escreva(inteiro nova_var);
+    
+    // 5.9 - Sem fechamento de parênteses
+    escreva("texto sem fechar";
+    
+    // 5.9 - String não fechada
+    escreva("texto não fechado);
+    
+    // Vírgula no final sem conteúdo
+    escreva(x, y,);
+    
+    // Sem ponto e vírgula
+    escreva("teste")
+}

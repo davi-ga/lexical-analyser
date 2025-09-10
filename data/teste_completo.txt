@@ -1,0 +1,44 @@
+funcao __somar(!a, !b){
+    inteiro !resultado;
+    !resultado = !a + !b;
+    retorno !resultado;
+}
+
+funcao __multiplicar(!x, !y, !z){
+    inteiro !produto = !x * !y * !z;
+    retorno !produto;
+}
+
+funcao __semParametros(){
+    inteiro !local = 10;
+    retorno !local;
+}
+
+principal(){
+    inteiro !num1, !num2, !num3;
+    inteiro !soma, !mult;
+    texto !nome = "Teste";
+    decimal !pi = 3.14;
+    
+    !num1 = 5;
+    !num2 = 10;
+    !num3 = 2;
+    
+    
+    !soma = __somar(!num1, !num2);
+    !mult = __multiplicar(!num1, !num2, !num3);
+    
+ 
+    __semParametros();
+    
+
+    __inexistente(!num1);
+    
+    __somar(!num1);
+    __multiplicar(!num1, !num2);
+    
+    escreva("Resultado: ");
+    escreva(!soma);
+    
+    retorno 0;
+}

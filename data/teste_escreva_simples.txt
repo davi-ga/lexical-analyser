@@ -1,0 +1,23 @@
+// Teste simples do comando escreva - casos básicos válidos
+programa teste_escreva_simples {
+    inteiro idade;
+    cadeia nome;
+    
+    idade = 25;
+    nome = "João";
+    
+    // Caso 1: Escrita de uma única variável
+    escreva(idade);
+    
+    // Caso 2: Escrita de texto simples
+    escreva("Olá mundo");
+    
+    // Caso 3: Mescla de texto e variável
+    escreva("Nome: ", nome);
+    
+    // Caso 4: Múltiplas variáveis
+    escreva(nome, idade);
+    
+    // Caso 5: Texto e múltiplas variáveis
+    escreva("Usuario: ", nome, ", Idade: ", idade, " anos");
+}

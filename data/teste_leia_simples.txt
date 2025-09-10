@@ -1,0 +1,10 @@
+principal(){
+    inteiro !a, !b;
+    texto !nome;
+    
+    leia(!a);
+    leia(!a, !b, !nome);
+    leia(!inexistente);
+    
+    retorno 0;
+}

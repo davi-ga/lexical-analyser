@@ -1,0 +1,33 @@
+// Teste das validações para o comando leia
+
+principal(){
+    inteiro !a, !b;
+    texto !nome;
+    decimal !valor;
+    
+    // Caso 1: leia válido com uma variável
+    leia(!a);
+    
+    // Caso 2: leia válido com múltiplas variáveis de tipos diferentes
+    leia(!a, !b, !nome, !valor);
+    
+    // Caso 3: Erro - variável não declarada
+    leia(!inexistente);
+    
+    // Caso 4: Erro - declaração dentro do leia
+    leia(inteiro !novo);
+    
+    // Caso 5: Erro - sem parênteses
+    leia !a;
+    
+    // Caso 6: Erro - sem ponto e vírgula
+    leia(!a)
+    
+    // Caso 7: Erro - vírgula sem variável
+    leia(!a, );
+    
+    // Caso 8: Erro - vírgulas duplas
+    leia(!a,, !b);
+    
+    retorno 0;
+}

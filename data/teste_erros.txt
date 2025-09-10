@@ -1,0 +1,33 @@
+// Arquivo de teste para casos de erro na tabela de símbolos
+
+// Erro: função sem prefixo __
+funcao soma(!a, !b){
+    retorno !a + !b;
+}
+
+// Erro: nome de função muito curto
+funcao __(){
+    retorno 0;
+}
+
+// Função válida
+funcao __teste(!param){
+    inteiro !local;
+    !local = !param * 2;
+    retorno !local;
+}
+
+principal(){
+    inteiro !x = 5;
+    
+    // Erro: uso de variável não declarada
+    !y = !x + 10;
+    
+    // Erro: redeclaração de variável
+    inteiro !x = 20;
+    
+    // Chamada válida
+    __teste(!x);
+    
+    retorno 0;
+}

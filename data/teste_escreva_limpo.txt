@@ -1,0 +1,17 @@
+programa teste_escreva_simples {
+    inteiro idade;
+    texto nome;
+    
+    idade = 25;
+    nome = "João";
+    
+    escreva(idade);
+    
+    escreva("Olá mundo");
+    
+    escreva("Nome: ", nome);
+    
+    escreva(nome, idade);
+    
+    escreva("Usuario: ", nome, ", Idade: ", idade, " anos");
+}

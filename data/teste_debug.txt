@@ -1,0 +1,5 @@
+programa teste {
+    inteiro x;
+    x = 5;
+    escreva(x);
+}

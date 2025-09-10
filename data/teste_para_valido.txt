@@ -1,0 +1,21 @@
+funcao __principal() {
+    inteiro !i, !soma, !limite;
+    
+    !limite = 10;
+    !soma = 0;
+    
+    para (!i = 1; !i <= !limite; !i++) {
+        !soma = !soma + !i;
+        escreva("i = ", !i);
+    }
+    
+    para (!i = 0; !i < 5; !i = !i + 2)
+        escreva("Par: ", !i);
+    
+    para (; !soma > 0; !soma--)
+        escreva("Countdown: ", !soma);
+    
+    para (!i = !limite, !soma = 0; !i > 0; !i--, !soma++) {
+        escreva("Multiplas operacoes");
+    }
+}

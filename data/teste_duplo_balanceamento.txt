@@ -1,0 +1,25 @@
+funcao __principal() {
+    inteiro !x = 10;
+    texto !nome = "Teste";
+    
+    escreva("Valor: ", !x, ", Nome: ", !nome);
+    
+    leia(!x, !nome);
+    
+    se (!x > 5) {
+        escreva("Maior que 5");
+    } senao {
+        escreva("Menor ou igual a 5");
+    }
+    
+    para (!x = 1; !x <= 10; !x++) {
+        escreva("Contador: ", !x);
+    }
+    
+    __outraFuncao(!x, "parametro com aspas", (!x + 5));
+}
+
+funcao __outraFuncao(inteiro !a, texto !b, inteiro !c) {
+    escreva("Funcao com parametros: ", !a, !b, !c);
+    retorno;
+}

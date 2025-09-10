@@ -1,0 +1,29 @@
+funcao __principal() {
+    inteiro !x = 10;
+    inteiro !resultado;
+    
+    !resultado = __somar(!x, 5);
+    escreva("Resultado: ", !resultado);
+    
+    __mostrarMensagem("Olá mundo");
+    
+    !resultado = __multiplicar(!x, 3);
+    escreva("Multiplicacao: ", !resultado);
+}
+
+funcao __somar(inteiro !a, inteiro !b) {
+    inteiro !soma;
+    !soma = !a + !b;
+    retorno !soma;
+}
+
+funcao __mostrarMensagem(texto !msg) {
+    escreva("Mensagem: ", !msg);
+    retorno;
+}
+
+funcao __multiplicar(inteiro !x, inteiro !y) {
+    inteiro !produto;
+    !produto = !x * !y;
+    retorno !produto;
+}

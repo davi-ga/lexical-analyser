@@ -1,0 +1,6 @@
+funcao __principal() {
+    inteiro !valor = 10;
+    
+    se (!valor > 0) 
+        escreva("Positivo");
+}

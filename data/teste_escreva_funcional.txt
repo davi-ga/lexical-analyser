@@ -1,0 +1,12 @@
+funcao __principal() {
+    inteiro !x = 10;
+    inteiro !y = 20;
+    texto !nome = "João";
+    decimal !pi = 3.14;
+    
+    escreva(!x);
+    escreva("Resultado: ");
+    escreva("Nome: ", !nome);
+    escreva(!x, !y);
+    escreva("Usuario: ", !nome, ", Valor: ", !x);
+}

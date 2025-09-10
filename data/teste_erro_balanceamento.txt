@@ -1,0 +1,19 @@
+funcao __principal() {
+    inteiro !x = 10;
+    
+    escreva("String sem fechar, !x);
+    
+    leia(!x, (!y + 5);
+    
+    se (!x > 5 {
+        escreva("Sem fechar parenteses do se");
+    }
+    
+    para (!x = 1; !x <= 10; !x++ {
+        escreva("Sem fechar parenteses do para");
+    }
+    
+    __funcao(!x, "param1", (!y + 3);
+    
+    escreva("Duplas aspas "sem balanceamento);
+}

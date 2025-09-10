@@ -1,0 +1,23 @@
+funcao __principal() {
+    inteiro !x = 5;
+    
+    para (!x = 0 !x < 10; !x++)
+        escreva(!x);
+    
+    para (!x = 0; ; !x++)
+        escreva("sem condicao");
+    
+    para (!y = 0; !y < 10; !y++)
+        escreva("variavel nao declarada");
+    
+    para (!x = 0; !x < 10; !x++) {
+        inteiro !nova = 20;
+        escreva(!nova);
+    }
+    
+    para (!x = 0; !x < 10; !x++) {
+        escreva("sem fechar chave");
+    
+    para (!x = 0; !x < 10)
+        escreva("sem terceiro parametro");
+}

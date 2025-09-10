@@ -1,0 +1,24 @@
+funcao __principal() {
+    inteiro !x = 10;
+    
+    se (!x > 5);
+    
+    se (!x < 5)
+        escreva("sem ponto e virgula")
+    
+    se () 
+        escreva("teste vazio");
+    
+    se (!x > 5) {
+        inteiro !nova = 20;
+        escreva(!nova);
+    }
+    
+    se (!x < 5) {
+        escreva("sem fechar chave");
+    
+    se (!x == 5)
+    
+    se (!x != 5) {
+        escreva("bloco sem fechar");
+}

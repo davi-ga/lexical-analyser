@@ -1,0 +1,12 @@
+funcao __teste(!a, !b){
+    inteiro !resultado;
+    !resultado = !a + !b;
+    retorno !resultado;
+}
+
+principal(){
+    inteiro !x = 5;
+    inteiro !y = 10;
+    __teste(!x, !y);
+    retorno 0;
+}

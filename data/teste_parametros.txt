@@ -1,0 +1,39 @@
+// Teste das novas validações para parâmetros
+
+// Caso 1: Função válida com múltiplos parâmetros
+funcao __valida(!a, !b, !c){
+    inteiro !local = !a + !b + !c;
+    retorno !local;
+}
+
+// Caso 2: Erro - parâmetro redeclarado dentro da função
+funcao __erro_redeclaracao(!x, !y){
+    inteiro !x = 10; // ERRO: !x já é parâmetro
+    retorno !x + !y;
+}
+
+// Caso 3: Erro - vírgulas incorretas nos parâmetros
+funcao __erro_virgulas(!a,, !b){
+    retorno !a + !b;
+}
+
+// Caso 4: Erro - parâmetro faltando após vírgula
+funcao __erro_parametro_faltando(!a, ){
+    retorno !a;
+}
+
+// Caso 5: Função sem parâmetros
+funcao __sem_parametros(){
+    inteiro !resultado = 42;
+    retorno !resultado;
+}
+
+principal(){
+    inteiro !num1 = 5;
+    inteiro !num2 = 10;
+    
+    __valida(!num1, !num2, 15);
+    __sem_parametros();
+    
+    retorno 0;
+}
